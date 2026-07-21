@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ESP & AIMBOT EDITION
+-- UNIVERSAL HUB: ESP & AIMBOT (SKELETON & HEALTH ADDED)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -40,9 +40,11 @@ State.ESP_Box = true
 State.ESP_Name = true
 State.ESP_Distance = true
 State.ESP_Tracers = false
+State.ESP_Health = false
+State.ESP_Skeleton = false
 State.ESP_Objects = {}
 
-State.Aimbot_Enabled = false
+State.Aimbot_Mode = "Off"
 State.Aimbot_FOV = 120
 State.Aimbot_Smooth = 5
 State.Aimbot_WallCheck = true
@@ -104,14 +106,6 @@ local function createESP(player)
     stroke.Thickness = 2
     stroke.Parent = box
 
-    local tracer = Instance.new("Frame")
-    tracer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    tracer.BorderSizePixel = 0
-    tracer.AnchorPoint = Vector2.new(0.5, 0.5)
-    tracer.Size = UDim2.new(0, 1, 0, 1)
-    tracer.Visible = false
-    tracer.Parent = frame
-
     local nameLbl = Instance.new("TextLabel")
     nameLbl.BackgroundTransparency = 1
     nameLbl.TextColor3 = Color3.new(1, 1, 1)
@@ -130,12 +124,47 @@ local function createESP(player)
     distLbl.Visible = false
     distLbl.Parent = frame
 
+    local healthBg = Instance.new("Frame")
+    healthBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    healthBg.BorderSizePixel = 0
+    healthBg.Visible = false
+    healthBg.Parent = frame
+
+    local healthFill = Instance.new("Frame")
+    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthFill.BorderSizePixel = 0
+    healthFill.Parent = healthBg
+
+    local tracer = Instance.new("Frame")
+    tracer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    tracer.BorderSizePixel = 0
+    tracer.AnchorPoint = Vector2.new(0.5, 0.5)
+    tracer.Size = UDim2.new(0, 1, 0, 1)
+    tracer.Visible = false
+    tracer.Parent = frame
+
+    -- Skeleton Lines (14 lines per player)
+    local skeletonLines = {}
+    for i = 1, 14 do
+        local line = Instance.new("Frame")
+        line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        line.BorderSizePixel = 0
+        line.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.Size = UDim2.new(0, 1, 0, 1)
+        line.Visible = false
+        line.Parent = frame
+        table.insert(skeletonLines, line)
+    end
+
     State.ESP_Objects[player] = {
         Frame = frame, 
         Box = box, 
         Tracer = tracer, 
         Name = nameLbl, 
-        Dist = distLbl
+        Dist = distLbl,
+        HealthBg = healthBg,
+        HealthFill = healthFill,
+        Skeleton = skeletonLines
     }
 end
 
@@ -147,6 +176,16 @@ local function removeESP(player)
 end
 
 Players.PlayerRemoving:Connect(removeESP)
+
+-- Helper to draw a line
+local function drawLine(lineFrame, p1, p2)
+    local dist = (p2 - p1).Magnitude
+    local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
+    lineFrame.Position = UDim2.fromOffset((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2)
+    lineFrame.Size = UDim2.fromOffset(dist, 1)
+    lineFrame.Rotation = math.deg(angle)
+    lineFrame.Visible = true
+end
 
 -- Aimbot Logic
 local function getClosestPlayer()
@@ -196,9 +235,9 @@ local function getClosestPlayer()
 end
 
 -- Main Render Loop
-RunService.RenderStepped:Connect(function()
+RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
     -- FOV Circle Update
-    if State.Aimbot_ShowFOV and State.Aimbot_Enabled then
+    if State.Aimbot_ShowFOV and State.Aimbot_Mode ~= "Off" then
         FOVCircle.Visible = true
         local size = State.Aimbot_FOV * 2
         FOVCircle.Size = UDim2.fromOffset(size, size)
@@ -208,12 +247,18 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Aimbot Update
-    if State.Aimbot_Enabled then
+    local aimbotActive = false
+    if State.Aimbot_Mode == "Always" then
+        aimbotActive = true
+    elseif State.Aimbot_Mode == "Hold (Right Mouse)" then
+        aimbotActive = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+    end
+
+    if aimbotActive then
         local target = getClosestPlayer()
         if target and target.Character then
             local targetHead = target.Character:FindFirstChild("Head")
             if targetHead then
-                -- 10 = Fast, 1 = Sticky. So alpha = Smoothness / 10
                 local alpha = State.Aimbot_Smooth / 10
                 local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetHead.Position)
                 Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
@@ -236,8 +281,9 @@ RunService.RenderStepped:Connect(function()
             if player.Character then
                 local hrp = player.Character:FindFirstChild("HumanoidRootPart")
                 local head = player.Character:FindFirstChild("Head")
+                local hum = player.Character:FindFirstChildOfClass("Humanoid")
                 
-                if hrp and head then
+                if hrp and head and hum then
                     local headScreen, onScreen = Cam:WorldToViewportPoint(head.Position)
                     
                     if onScreen then
@@ -276,37 +322,101 @@ RunService.RenderStepped:Connect(function()
                             obj.Dist.Visible = false
                         end
 
+                        -- Health Bar
+                        if State.ESP_Health then
+                            local hp = hum.Health / hum.MaxHealth
+                            obj.HealthBg.Position = UDim2.fromOffset(headScreen.X - width/2 - 5, headScreen.Y)
+                            obj.HealthBg.Size = UDim2.new(0, 3, 0, height)
+                            obj.HealthFill.Size = UDim2.new(1, 0, hp, 0)
+                            obj.HealthFill.BackgroundColor3 = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
+                            obj.HealthBg.Visible = true
+                        else
+                            obj.HealthBg.Visible = false
+                        end
+
                         -- Tracers
                         if State.ESP_Tracers then
                             local p1 = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
                             local p2 = Vector2.new(headScreen.X, headScreen.Y)
-                            local dist = (p2 - p1).Magnitude
-                            local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
-                            
-                            obj.Tracer.Position = UDim2.fromOffset((p1.X + p2.X)/2, (p1.Y + p2.Y)/2)
-                            obj.Tracer.Size = UDim2.fromOffset(dist, 1)
-                            obj.Tracer.Rotation = math.deg(angle)
-                            obj.Tracer.Visible = true
+                            drawLine(obj.Tracer, p1, p2)
                         else
                             obj.Tracer.Visible = false
+                        end
+
+                        -- Skeleton ESP
+                        if State.ESP_Skeleton then
+                            -- Hide all first
+                            for _, line in pairs(obj.Skeleton) do
+                                line.Visible = false
+                            end
+                            
+                            -- R15 / R6 Universal Bones
+                            local bones = {
+                                {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+                                {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+                                {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+                                {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+                                {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+                            }
+                            
+                            -- R6 Fallback
+                            if not player.Character:FindFirstChild("UpperTorso") then
+                                bones = {
+                                    {"Head", "Torso"},
+                                    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+                                    {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+                                }
+                            end
+
+                            local lineIdx = 1
+                            for _, bone in pairs(bones) do
+                                local part1 = player.Character:FindFirstChild(bone[1])
+                                local part2 = player.Character:FindFirstChild(bone[2])
+                                if part1 and part2 then
+                                    local p1, on1 = Cam:WorldToViewportPoint(part1.Position)
+                                    local p2, on2 = Cam:WorldToViewportPoint(part2.Position)
+                                    if on1 and on2 and p1.Z > 0 and p2.Z > 0 then
+                                        if obj.Skeleton[lineIdx] then
+                                            drawLine(obj.Skeleton[lineIdx], Vector2.new(p1.X, p1.Y), Vector2.new(p2.X, p2.Y))
+                                        end
+                                    end
+                                    lineIdx = lineIdx + 1
+                                end
+                            end
+                        else
+                            for _, line in pairs(obj.Skeleton) do
+                                line.Visible = false
+                            end
                         end
                     else
                         obj.Box.Visible = false
                         obj.Name.Visible = false
                         obj.Dist.Visible = false
+                        obj.HealthBg.Visible = false
                         obj.Tracer.Visible = false
+                        for _, line in pairs(obj.Skeleton) do
+                            line.Visible = false
+                        end
                     end
                 else
                     obj.Box.Visible = false
                     obj.Name.Visible = false
                     obj.Dist.Visible = false
+                    obj.HealthBg.Visible = false
                     obj.Tracer.Visible = false
+                    for _, line in pairs(obj.Skeleton) do
+                        line.Visible = false
+                    end
                 end
             else
                 obj.Box.Visible = false
                 obj.Name.Visible = false
                 obj.Dist.Visible = false
+                obj.HealthBg.Visible = false
                 obj.Tracer.Visible = false
+                for _, line in pairs(obj.Skeleton) do
+                    line.Visible = false
+                end
             end
         end
     end
@@ -364,6 +474,15 @@ local ESPDistConfig = {
 }
 TabESP:CreateToggle(ESPDistConfig)
 
+local ESPHealthConfig = {
+    Name = "Health Bar ESP",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Health = Value
+    end
+}
+TabESP:CreateToggle(ESPHealthConfig)
+
 local ESPTracerConfig = {
     Name = "Tracers",
     CurrentValue = false,
@@ -373,15 +492,25 @@ local ESPTracerConfig = {
 }
 TabESP:CreateToggle(ESPTracerConfig)
 
--- Aimbot Tab
-local AimbotEnableConfig = {
-    Name = "Enable Aimbot",
+local ESPSkelConfig = {
+    Name = "Skeleton ESP",
     CurrentValue = false,
     Callback = function(Value)
-        State.Aimbot_Enabled = Value
+        State.ESP_Skeleton = Value
     end
 }
-TabAimbot:CreateToggle(AimbotEnableConfig)
+TabESP:CreateToggle(ESPSkelConfig)
+
+-- Aimbot Tab
+local AimbotModeConfig = {
+    Name = "Aimbot Mode",
+    Options = {"Off", "Always", "Hold (Right Mouse)"},
+    CurrentOption = "Off",
+    Callback = function(Value)
+        State.Aimbot_Mode = Value
+    end
+}
+TabAimbot:CreateDropdown(AimbotModeConfig)
 
 local AimbotFOVConfig = {
     Name = "Aimbot FOV",
