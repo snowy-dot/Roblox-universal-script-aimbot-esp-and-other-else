@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION
+-- UNIVERSAL HUB: ADVANCED EDITION V2
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -52,7 +52,7 @@ State.ESP_Objects = {}
 State.Aimbot_Mode = "Off"
 State.Aimbot_ToggleActive = false
 State.Aimbot_FOV = 120
-State.Aimbot_Smooth = 5
+State.Aimbot_Smooth = 1
 State.Aimbot_WallCheck = true
 State.Aimbot_TeamCheck = true
 State.Aimbot_ShowFOV = true
@@ -229,7 +229,13 @@ local function getClosestPlayer()
             end
 
             if not isTeam then
+                -- Fallback chain to ensure we always find a valid part
                 local targetPart = player.Character:FindFirstChild(State.Aimbot_TargetPart)
+                if not targetPart then targetPart = player.Character:FindFirstChild("Head") end
+                if not targetPart then targetPart = player.Character:FindFirstChild("HumanoidRootPart") end
+                if not targetPart then targetPart = player.Character:FindFirstChild("Torso") end
+                if not targetPart then targetPart = player.Character:FindFirstChild("UpperTorso") end
+
                 local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 
                 if targetPart and myHrp then
@@ -279,7 +285,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Silent Aim Hook
+-- Silent Aim Hook (Fixed Math)
 pcall(function()
     local OldNamecall
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -287,19 +293,23 @@ pcall(function()
         local args = {...}
         
         if State.SilentAim_Enabled and self == workspace then
-            if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-                local target = getClosestPlayer()
-                if target and target.Character and target.Character:FindFirstChild(State.Aimbot_TargetPart) then
-                    local origin = args[1].Origin
-                    local direction = (target.Character[State.Aimbot_TargetPart].Position - origin)
-                    args[1] = Ray.new(origin, direction)
-                end
-            elseif method == "Raycast" then
-                local target = getClosestPlayer()
-                if target and target.Character and target.Character:FindFirstChild(State.Aimbot_TargetPart) then
-                    local origin = args[1]
-                    local direction = (target.Character[State.Aimbot_TargetPart].Position - origin)
-                    args[2] = direction
+            local target = getClosestPlayer()
+            if target and target.Character then
+                -- Fallback for silent aim target part
+                local targetPart = target.Character:FindFirstChild(State.Aimbot_TargetPart)
+                if not targetPart then targetPart = target.Character:FindFirstChild("Head") end
+                if not targetPart then targetPart = target.Character:FindFirstChild("HumanoidRootPart") end
+                
+                if targetPart then
+                    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+                        local origin = args[1].Origin
+                        local direction = (targetPart.Position - origin)
+                        args[1] = Ray.new(origin, direction)
+                    elseif method == "Raycast" then
+                        local origin = args[1]
+                        local direction = (targetPart.Position - origin)
+                        args[2] = direction
+                    end
                 end
             end
         end
@@ -338,12 +348,20 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
     if aimbotActive then
         local target = getClosestPlayer()
         if target and target.Character then
+            -- Fallback for camera target part
             local targetPart = target.Character:FindFirstChild(State.Aimbot_TargetPart)
+            if not targetPart then targetPart = target.Character:FindFirstChild("Head") end
+            if not targetPart then targetPart = target.Character:FindFirstChild("HumanoidRootPart") end
+
             if targetPart then
-                -- 1 = Instant, 10 = Smooth. Alpha = 1 / Smoothness
-                local alpha = 1 / State.Aimbot_Smooth
                 local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetPart.Position)
-                Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
+                -- 1 = Instant Snap, 10 = Very Smooth
+                if State.Aimbot_Smooth == 1 then
+                    Cam.CFrame = targetCFrame
+                else
+                    local alpha = 1 / State.Aimbot_Smooth
+                    Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
+                end
             end
         end
     end
@@ -362,7 +380,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
 
             if State.Fly_Enabled then
                 hum.PlatformStand = true
-                local d = Vector3.new(0, 0, 0)
+                local d = Vector3.new(0,0,0)
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Cam.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Cam.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.A) then d = d - Cam.CFrame.RightVector end
@@ -574,6 +592,7 @@ local Window = Rayfield:CreateWindow(WindowConfig)
 local TabLocal = Window:CreateTab("Local", 4483362458)
 local TabESP = Window:CreateTab("ESP", 4483362458)
 local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
+local TabMisc = Window:CreateTab("Misc", 4483362458)
 
 -- Local Tab
 local FlyConfig = {
@@ -776,10 +795,10 @@ local AimbotFOVConfig = {
 TabAimbot:CreateSlider(AimbotFOVConfig)
 
 local AimbotSmoothConfig = {
-    Name = "Smoothness (1 = Instant, 10 = Smooth)",
+    Name = "Smoothness (1 = Instant Snap, 10 = Smooth)",
     Range = {1, 10},
     Increment = 1,
-    CurrentValue = 5,
+    CurrentValue = 1,
     Callback = function(Value)
         State.Aimbot_Smooth = Value
     end
@@ -830,6 +849,25 @@ local AimbotFOVColorConfig = {
     end
 }
 TabAimbot:CreateColorPicker(AimbotFOVColorConfig)
+
+-- Misc Tab
+local UnloadConfig = {
+    Name = "Unload Script (Dead Switch)",
+    Callback = function()
+        pcall(function()
+            RunService:UnbindFromRenderStep("UniversalHubLoop")
+        end)
+        for player, obj in pairs(State.ESP_Objects) do
+            obj.Frame:Destroy()
+        end
+        State.ESP_Objects = {}
+        if ESPGui then
+            ESPGui:Destroy()
+        end
+        Rayfield:Destroy()
+    end
+}
+TabMisc:CreateButton(UnloadConfig)
 
 local NotifyConfig = {
     Title = "Universal Hub",
