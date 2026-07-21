@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ESP & AIMBOT (CENTER LOCK FIX)
+-- UNIVERSAL HUB: ADVANCED EDITION
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -42,6 +42,11 @@ State.ESP_Distance = true
 State.ESP_Tracers = false
 State.ESP_Health = false
 State.ESP_Skeleton = false
+State.ESP_HeadDot = false
+State.ESP_Rainbow = false
+State.ESP_BoxColor = Color3.fromRGB(255, 0, 0)
+State.ESP_NameColor = Color3.fromRGB(255, 255, 255)
+State.ESP_TracerColor = Color3.fromRGB(255, 255, 255)
 State.ESP_Objects = {}
 
 State.Aimbot_Mode = "Off"
@@ -51,6 +56,17 @@ State.Aimbot_Smooth = 5
 State.Aimbot_WallCheck = true
 State.Aimbot_TeamCheck = true
 State.Aimbot_ShowFOV = true
+State.Aimbot_TargetPart = "Head"
+State.Aimbot_RainbowFOV = false
+State.Aimbot_FOVColor = Color3.fromRGB(255, 255, 255)
+
+State.SilentAim_Enabled = false
+
+State.Fly_Enabled = false
+State.Fly_Speed = 50
+State.Speed_Enabled = false
+State.Speed_Amt = 50
+State.InfJump_Enabled = false
 
 -- Visuals Setup
 local ESPGui = Instance.new("ScreenGui")
@@ -103,13 +119,13 @@ local function createESP(player)
     box.Parent = frame
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 0, 0)
+    stroke.Color = State.ESP_BoxColor
     stroke.Thickness = 2
     stroke.Parent = box
 
     local nameLbl = Instance.new("TextLabel")
     nameLbl.BackgroundTransparency = 1
-    nameLbl.TextColor3 = Color3.new(1, 1, 1)
+    nameLbl.TextColor3 = State.ESP_NameColor
     nameLbl.TextStrokeTransparency = 0.5
     nameLbl.Font = Enum.Font.GothamBold
     nameLbl.TextSize = 12
@@ -137,12 +153,23 @@ local function createESP(player)
     healthFill.Parent = healthBg
 
     local tracer = Instance.new("Frame")
-    tracer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    tracer.BackgroundColor3 = State.ESP_TracerColor
     tracer.BorderSizePixel = 0
     tracer.AnchorPoint = Vector2.new(0.5, 0.5)
     tracer.Size = UDim2.new(0, 1, 0, 1)
     tracer.Visible = false
     tracer.Parent = frame
+
+    local headDot = Instance.new("Frame")
+    headDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    headDot.Size = UDim2.fromOffset(8, 8)
+    headDot.BorderSizePixel = 0
+    headDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    headDot.Visible = false
+    headDot.Parent = frame
+    local dotCorner = Instance.new("UICorner")
+    dotCorner.CornerRadius = UDim.new(1, 0)
+    dotCorner.Parent = headDot
 
     local skeletonLines = {}
     for i = 1, 14 do
@@ -164,6 +191,7 @@ local function createESP(player)
         Dist = distLbl,
         HealthBg = healthBg,
         HealthFill = healthFill,
+        HeadDot = headDot,
         Skeleton = skeletonLines
     }
 end
@@ -187,7 +215,7 @@ local function drawLine(lineFrame, p1, p2)
     lineFrame.Visible = true
 end
 
--- Aimbot Logic (Locks to Screen Center)
+-- Aimbot/Silent Aim Target Logic
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDist = State.Aimbot_FOV
@@ -201,14 +229,12 @@ local function getClosestPlayer()
             end
 
             if not isTeam then
-                local head = player.Character:FindFirstChild("Head")
-                local targetHrp = player.Character:FindFirstChild("HumanoidRootPart")
+                local targetPart = player.Character:FindFirstChild(State.Aimbot_TargetPart)
                 local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 
-                if head and targetHrp and myHrp then
-                    local screenPos, onScreen = Cam:WorldToViewportPoint(head.Position)
+                if targetPart and myHrp then
+                    local screenPos, onScreen = Cam:WorldToViewportPoint(targetPart.Position)
                     if onScreen then
-                        -- Calculate distance from screen center
                         local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
                         if dist < shortestDist then
                             local visible = true
@@ -216,7 +242,7 @@ local function getClosestPlayer()
                                 local rayParams = RaycastParams.new()
                                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
                                 rayParams.FilterDescendantsInstances = {LP.Character, player.Character}
-                                local result = workspace:Raycast(myHrp.Position, (head.Position - myHrp.Position).Unit * (head.Position - myHrp.Position).Magnitude, rayParams)
+                                local result = workspace:Raycast(myHrp.Position, (targetPart.Position - myHrp.Position).Unit * (targetPart.Position - myHrp.Position).Magnitude, rayParams)
                                 if result then
                                     visible = false
                                 end
@@ -243,16 +269,58 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             State.Aimbot_ToggleActive = not State.Aimbot_ToggleActive
         end
     end
+    if input.KeyCode == Enum.KeyCode.Space then
+        if State.InfJump_Enabled and LP.Character then
+            local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
+
+-- Silent Aim Hook
+pcall(function()
+    local OldNamecall
+    OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        if State.SilentAim_Enabled and self == workspace then
+            if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+                local target = getClosestPlayer()
+                if target and target.Character and target.Character:FindFirstChild(State.Aimbot_TargetPart) then
+                    local origin = args[1].Origin
+                    local direction = (target.Character[State.Aimbot_TargetPart].Position - origin)
+                    args[1] = Ray.new(origin, direction)
+                end
+            elseif method == "Raycast" then
+                local target = getClosestPlayer()
+                if target and target.Character and target.Character:FindFirstChild(State.Aimbot_TargetPart) then
+                    local origin = args[1]
+                    local direction = (target.Character[State.Aimbot_TargetPart].Position - origin)
+                    args[2] = direction
+                end
+            end
+        end
+        return OldNamecall(self, unpack(args))
+    end)
 end)
 
 -- Main Render Loop
 RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
     -- FOV Circle Update
-    if State.Aimbot_ShowFOV and State.Aimbot_Mode ~= "Off" then
+    if State.Aimbot_ShowFOV and (State.Aimbot_Mode ~= "Off" or State.SilentAim_Enabled) then
         FOVCircle.Visible = true
         local size = State.Aimbot_FOV * 2
         FOVCircle.Size = UDim2.fromOffset(size, size)
         FOVCircle.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
+        if State.Aimbot_RainbowFOV then
+            local hue = tick() % 5 / 5
+            FOVStroke.Color = Color3.fromHSV(hue, 1, 1)
+        else
+            FOVStroke.Color = State.Aimbot_FOVColor
+        end
     else
         FOVCircle.Visible = false
     end
@@ -263,17 +331,53 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
         aimbotActive = true
     elseif State.Aimbot_Mode == "Toggle (Press F)" then
         aimbotActive = State.Aimbot_ToggleActive
+    elseif State.Aimbot_Mode == "Hold (Right Mouse)" then
+        aimbotActive = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
     end
 
     if aimbotActive then
         local target = getClosestPlayer()
         if target and target.Character then
-            local targetHead = target.Character:FindFirstChild("Head")
-            if targetHead then
-                -- 10 = Fast, 1 = Sticky. Alpha = Smoothness / 10
-                local alpha = State.Aimbot_Smooth / 10
-                local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetHead.Position)
+            local targetPart = target.Character:FindFirstChild(State.Aimbot_TargetPart)
+            if targetPart then
+                -- 1 = Instant, 10 = Smooth. Alpha = 1 / Smoothness
+                local alpha = 1 / State.Aimbot_Smooth
+                local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetPart.Position)
                 Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
+            end
+        end
+    end
+
+    -- Local Player Loops
+    if LP.Character then
+        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+        local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
+        
+        if hum and hrp then
+            if State.Speed_Enabled then
+                pcall(function() hum.WalkSpeed = State.Speed_Amt end)
+            else
+                pcall(function() hum.WalkSpeed = 16 end)
+            end
+
+            if State.Fly_Enabled then
+                hum.PlatformStand = true
+                local d = Vector3.new(0, 0, 0)
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then d = d - Cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then d = d + Cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then d = d + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then d = d - Vector3.new(0, 1, 0) end
+                
+                if d.Magnitude > 0 then
+                    hrp.AssemblyLinearVelocity = d.Unit * State.Fly_Speed
+                else
+                    hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                end
+                hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Cam.CFrame.LookVector)
+            else
+                hum.PlatformStand = false
             end
         end
     end
@@ -306,10 +410,31 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                         end
                         local width = height / 2
 
+                        -- Rainbow Colors
+                        if State.ESP_Rainbow then
+                            local hue = tick() % 5 / 5
+                            local color = Color3.fromHSV(hue, 1, 1)
+                            obj.Box.UIStroke.Color = color
+                            obj.Name.TextColor3 = color
+                            obj.Tracer.BackgroundColor3 = color
+                        else
+                            obj.Box.UIStroke.Color = State.ESP_BoxColor
+                            obj.Name.TextColor3 = State.ESP_NameColor
+                            obj.Tracer.BackgroundColor3 = State.ESP_TracerColor
+                        end
+
                         -- Box
                         obj.Box.Position = UDim2.fromOffset(headScreen.X - width/2, headScreen.Y)
                         obj.Box.Size = UDim2.fromOffset(width, height)
                         obj.Box.Visible = State.ESP_Box
+
+                        -- Head Dot
+                        if State.ESP_HeadDot then
+                            obj.HeadDot.Position = UDim2.fromOffset(headScreen.X, headScreen.Y)
+                            obj.HeadDot.Visible = true
+                        else
+                            obj.HeadDot.Visible = false
+                        end
 
                         -- Name
                         if State.ESP_Name then
@@ -403,6 +528,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                         obj.Dist.Visible = false
                         obj.HealthBg.Visible = false
                         obj.Tracer.Visible = false
+                        obj.HeadDot.Visible = false
                         for _, line in pairs(obj.Skeleton) do
                             line.Visible = false
                         end
@@ -413,6 +539,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                     obj.Dist.Visible = false
                     obj.HealthBg.Visible = false
                     obj.Tracer.Visible = false
+                    obj.HeadDot.Visible = false
                     for _, line in pairs(obj.Skeleton) do
                         line.Visible = false
                     end
@@ -423,6 +550,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                 obj.Dist.Visible = false
                 obj.HealthBg.Visible = false
                 obj.Tracer.Visible = false
+                obj.HeadDot.Visible = false
                 for _, line in pairs(obj.Skeleton) do
                     line.Visible = false
                 end
@@ -437,14 +565,65 @@ end)
 local WindowConfig = {
     Name = "Universal Hub",
     LoadingTitle = "Universal Hub",
-    LoadingSubtitle = "ESP & Aimbot",
+    LoadingSubtitle = "Advanced Edition",
     ConfigurationSaving = { Enabled = false },
     KeySystem = false
 }
 local Window = Rayfield:CreateWindow(WindowConfig)
 
+local TabLocal = Window:CreateTab("Local", 4483362458)
 local TabESP = Window:CreateTab("ESP", 4483362458)
 local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
+
+-- Local Tab
+local FlyConfig = {
+    Name = "Enable Fly",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.Fly_Enabled = Value
+    end
+}
+TabLocal:CreateToggle(FlyConfig)
+
+local FlySpeedConfig = {
+    Name = "Fly Speed",
+    Range = {10, 500},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(Value)
+        State.Fly_Speed = Value
+    end
+}
+TabLocal:CreateSlider(FlySpeedConfig)
+
+local SpeedConfig = {
+    Name = "Enable Speed",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.Speed_Enabled = Value
+    end
+}
+TabLocal:CreateToggle(SpeedConfig)
+
+local SpeedAmtConfig = {
+    Name = "Speed Amount",
+    Range = {16, 500},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(Value)
+        State.Speed_Amt = Value
+    end
+}
+TabLocal:CreateSlider(SpeedAmtConfig)
+
+local InfJumpConfig = {
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.InfJump_Enabled = Value
+    end
+}
+TabLocal:CreateToggle(InfJumpConfig)
 
 -- ESP Tab
 local ESPEnableConfig = {
@@ -510,16 +689,80 @@ local ESPSkelConfig = {
 }
 TabESP:CreateToggle(ESPSkelConfig)
 
+local ESPHeadDotConfig = {
+    Name = "Head Dot",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_HeadDot = Value
+    end
+}
+TabESP:CreateToggle(ESPHeadDotConfig)
+
+local ESPRainbowConfig = {
+    Name = "Rainbow ESP",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.ESP_Rainbow = Value
+    end
+}
+TabESP:CreateToggle(ESPRainbowConfig)
+
+local ESPBoxColorConfig = {
+    Name = "Box Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Callback = function(Value)
+        State.ESP_BoxColor = Value
+    end
+}
+TabESP:CreateColorPicker(ESPBoxColorConfig)
+
+local ESPNameColorConfig = {
+    Name = "Name Color",
+    Color = Color3.fromRGB(255, 255, 255),
+    Callback = function(Value)
+        State.ESP_NameColor = Value
+    end
+}
+TabESP:CreateColorPicker(ESPNameColorConfig)
+
+local ESPTracerColorConfig = {
+    Name = "Tracer Color",
+    Color = Color3.fromRGB(255, 255, 255),
+    Callback = function(Value)
+        State.ESP_TracerColor = Value
+    end
+}
+TabESP:CreateColorPicker(ESPTracerColorConfig)
+
 -- Aimbot Tab
 local AimbotModeConfig = {
     Name = "Aimbot Mode",
-    Options = {"Off", "Always", "Toggle (Press F)"},
+    Options = {"Off", "Always", "Toggle (Press F)", "Hold (Right Mouse)"},
     CurrentOption = "Off",
     Callback = function(Value)
         State.Aimbot_Mode = Value
     end
 }
 TabAimbot:CreateDropdown(AimbotModeConfig)
+
+local SilentAimConfig = {
+    Name = "Enable Silent Aim",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.SilentAim_Enabled = Value
+    end
+}
+TabAimbot:CreateToggle(SilentAimConfig)
+
+local AimbotTargetConfig = {
+    Name = "Target Part",
+    Options = {"Head", "HumanoidRootPart", "Torso", "UpperTorso"},
+    CurrentOption = "Head",
+    Callback = function(Value)
+        State.Aimbot_TargetPart = Value
+    end
+}
+TabAimbot:CreateDropdown(AimbotTargetConfig)
 
 local AimbotFOVConfig = {
     Name = "Aimbot FOV",
@@ -533,7 +776,7 @@ local AimbotFOVConfig = {
 TabAimbot:CreateSlider(AimbotFOVConfig)
 
 local AimbotSmoothConfig = {
-    Name = "Smoothness (10 = Fast, 1 = Sticky)",
+    Name = "Smoothness (1 = Instant, 10 = Smooth)",
     Range = {1, 10},
     Increment = 1,
     CurrentValue = 5,
@@ -569,6 +812,24 @@ local AimbotShowFOVConfig = {
     end
 }
 TabAimbot:CreateToggle(AimbotShowFOVConfig)
+
+local AimbotRainbowFOVConfig = {
+    Name = "Rainbow FOV",
+    CurrentValue = false,
+    Callback = function(Value)
+        State.Aimbot_RainbowFOV = Value
+    end
+}
+TabAimbot:CreateToggle(AimbotRainbowFOVConfig)
+
+local AimbotFOVColorConfig = {
+    Name = "FOV Circle Color",
+    Color = Color3.fromRGB(255, 255, 255),
+    Callback = function(Value)
+        State.Aimbot_FOVColor = Value
+    end
+}
+TabAimbot:CreateColorPicker(AimbotFOVColorConfig)
 
 local NotifyConfig = {
     Title = "Universal Hub",
