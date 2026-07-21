@@ -1,777 +1,90 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION V6
+-- GAME SCANNER & REMOTE SPY
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local LP = Players.LocalPlayer
-local Cam = workspace.CurrentCamera
 
--- Load Rayfield
-local Rayfield = nil
-pcall(function()
-    local response = game:HttpGet('https://sirius.menu/rayfield')
-    local func = loadstring(response)
-    if func then
-        Rayfield = func()
-    end
-end)
+print("====================================")
+print("STARTING GAME SCAN & REMOTE SPY")
+print("====================================")
 
-if not Rayfield then
-    pcall(function()
-        local response = game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua')
-        local func = loadstring(response)
-        if func then
-            Rayfield = func()
-        end
-    end)
-end
-
-if not Rayfield then
-    print("Rayfield failed to load")
-    return
-end
-
--- State
-local State = {}
-State.ESP_Enabled = false
-State.ESP_Box = true
-State.ESP_Name = true
-State.ESP_Distance = true
-State.ESP_Tracers = false
-State.ESP_Health = false
-State.ESP_Skeleton = false
-State.ESP_HeadDot = false
-State.ESP_Rainbow = false
-State.ESP_BoxColor = Color3.fromRGB(255, 0, 0)
-State.ESP_NameColor = Color3.fromRGB(255, 255, 255)
-State.ESP_TracerColor = Color3.fromRGB(255, 255, 255)
-State.ESP_Objects = {}
-
-State.Aimbot_Mode = "Off"
-State.Aimbot_ToggleActive = false
-State.Aimbot_FOV = 120
-State.Aimbot_Smooth = 0 -- 0 = Instant Snap, 1 = Fast, 20 = Smooth
-State.Aimbot_WallCheck = true
-State.Aimbot_TeamCheck = true
-State.Aimbot_ShowFOV = true
-State.Aimbot_TargetPart = "Head"
-State.Aimbot_RainbowFOV = false
-State.Aimbot_FOVColor = Color3.fromRGB(255, 255, 255)
-
-State.SilentAim_Enabled = false
-State.CurrentTarget = nil -- For Aimbot
-State.CachedSilentTarget = nil -- For Silent Aim (Stays locked even if they leave FOV)
-
-State.Fly_Enabled = false
-State.Fly_Speed = 50
-State.Speed_Enabled = false
-State.Speed_Amt = 50
-State.InfJump_Enabled = false
-
--- Visuals Setup
-local ESPGui = Instance.new("ScreenGui")
-ESPGui.Name = "UniversalVisuals"
-ESPGui.ResetOnSpawn = false
-ESPGui.IgnoreGuiInset = true
-
-pcall(function()
-    ESPGui.Parent = gethui()
-end)
-if not ESPGui.Parent then
-    pcall(function()
-        ESPGui.Parent = CoreGui
-    end)
-end
-if not ESPGui.Parent then
-    ESPGui.Parent = LP:WaitForChild("PlayerGui")
-end
-
--- FOV Circle
-local FOVCircle = Instance.new("Frame")
-FOVCircle.Size = UDim2.new(0, 240, 0, 240)
-FOVCircle.Position = UDim2.new(0.5, -120, 0.5, -120)
-FOVCircle.BackgroundTransparency = 1
-FOVCircle.Parent = ESPGui
-FOVCircle.Visible = false
-
-local FOVStroke = Instance.new("UIStroke")
-FOVStroke.Color = Color3.fromRGB(255, 255, 255)
-FOVStroke.Thickness = 1.5
-FOVStroke.Transparency = 0.5
-FOVStroke.Parent = FOVCircle
-
-local FOVCorner = Instance.new("UICorner")
-FOVCorner.CornerRadius = UDim.new(0.5, 0)
-FOVCorner.Parent = FOVCircle
-
--- ESP Functions
-local function createESP(player)
-    if State.ESP_Objects[player] then
-        return
-    end
-    
-    local frame = Instance.new("Frame")
-    frame.BackgroundTransparency = 1
-    frame.Parent = ESPGui
-
-    local box = Instance.new("Frame")
-    box.BackgroundTransparency = 1
-    box.Parent = frame
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = State.ESP_BoxColor
-    stroke.Thickness = 2
-    stroke.Parent = box
-
-    local nameLbl = Instance.new("TextLabel")
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.TextColor3 = State.ESP_NameColor
-    nameLbl.TextStrokeTransparency = 0.5
-    nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 12
-    nameLbl.Visible = false
-    nameLbl.Parent = frame
-
-    local distLbl = Instance.new("TextLabel")
-    distLbl.BackgroundTransparency = 1
-    distLbl.TextColor3 = Color3.fromRGB(255, 255, 100)
-    distLbl.TextStrokeTransparency = 0.5
-    distLbl.Font = Enum.Font.Gotham
-    distLbl.TextSize = 10
-    distLbl.Visible = false
-    distLbl.Parent = frame
-
-    local healthBg = Instance.new("Frame")
-    healthBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    healthBg.BorderSizePixel = 0
-    healthBg.Visible = false
-    healthBg.Parent = frame
-
-    local healthFill = Instance.new("Frame")
-    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    healthFill.BorderSizePixel = 0
-    healthFill.Parent = healthBg
-
-    local tracer = Instance.new("Frame")
-    tracer.BackgroundColor3 = State.ESP_TracerColor
-    tracer.BorderSizePixel = 0
-    tracer.AnchorPoint = Vector2.new(0.5, 0.5)
-    tracer.Size = UDim2.new(0, 1, 0, 1)
-    tracer.Visible = false
-    tracer.Parent = frame
-
-    local headDot = Instance.new("Frame")
-    headDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    headDot.Size = UDim2.fromOffset(8, 8)
-    headDot.BorderSizePixel = 0
-    headDot.AnchorPoint = Vector2.new(0.5, 0.5)
-    headDot.Visible = false
-    headDot.Parent = frame
-    local dotCorner = Instance.new("UICorner")
-    dotCorner.CornerRadius = UDim.new(1, 0)
-    dotCorner.Parent = headDot
-
-    local skeletonLines = {}
-    for i = 1, 14 do
-        local line = Instance.new("Frame")
-        line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        line.BorderSizePixel = 0
-        line.AnchorPoint = Vector2.new(0.5, 0.5)
-        line.Size = UDim2.new(0, 1, 0, 1)
-        line.Visible = false
-        line.Parent = frame
-        table.insert(skeletonLines, line)
-    end
-
-    State.ESP_Objects[player] = {
-        Frame = frame, 
-        Box = box, 
-        Tracer = tracer, 
-        Name = nameLbl, 
-        Dist = distLbl,
-        HealthBg = healthBg,
-        HealthFill = healthFill,
-        HeadDot = headDot,
-        Skeleton = skeletonLines
-    }
-end
-
-local function removeESP(player)
-    if State.ESP_Objects[player] then
-        State.ESP_Objects[player].Frame:Destroy()
-        State.ESP_Objects[player] = nil
-    end
-end
-
-Players.PlayerRemoving:Connect(removeESP)
-
-local function drawLine(lineFrame, p1, p2)
-    local dist = (p2 - p1).Magnitude
-    local angle = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
-    lineFrame.Position = UDim2.fromOffset((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2)
-    lineFrame.Size = UDim2.fromOffset(dist, 1)
-    lineFrame.Rotation = math.deg(angle)
-    lineFrame.Visible = true
-end
-
--- Target Finding Logic
-local function getClosestPlayer()
-    local closestPlayer = nil
-    local shortestDist = State.Aimbot_FOV
-    local screenCenter = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character then
-            local isTeam = false
-            if State.Aimbot_TeamCheck and player.Team == LP.Team then
-                isTeam = true
-            end
-
-            if not isTeam then
-                local targetPart = player.Character:FindFirstChild(State.Aimbot_TargetPart)
-                if not targetPart then targetPart = player.Character:FindFirstChild("Head") end
-                if not targetPart then targetPart = player.Character:FindFirstChild("HumanoidRootPart") end
-                if not targetPart then targetPart = player.Character:FindFirstChild("Torso") end
-                if not targetPart then targetPart = player.Character:FindFirstChild("UpperTorso") end
-
-                local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-
-                if targetPart and myHrp then
-                    local screenPos, onScreen = Cam:WorldToViewportPoint(targetPart.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                        if dist < shortestDist then
-                            local visible = true
-                            if State.Aimbot_WallCheck then
-                                local rayParams = RaycastParams.new()
-                                rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                                rayParams.FilterDescendantsInstances = {LP.Character, player.Character}
-                                local result = workspace:Raycast(myHrp.Position, (targetPart.Position - myHrp.Position).Unit * (targetPart.Position - myHrp.Position).Magnitude, rayParams)
-                                if result then
-                                    visible = false
-                                end
-                            end
-                            
-                            if visible then
-                                shortestDist = dist
-                                closestPlayer = player
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return closestPlayer
-end
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.F then
-        if State.Aimbot_Mode == "Toggle (Press F)" then
-            State.Aimbot_ToggleActive = not State.Aimbot_ToggleActive
-        end
-    end
-    if input.KeyCode == Enum.KeyCode.Space then
-        if State.InfJump_Enabled and LP.Character then
-            local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end
-end)
-
--- Silent Aim Hook (With Target Caching)
-pcall(function()
-    local OldNamecall
-    OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
+-- ============================================
+-- 1. REMOTE SPY (Logs all RemoteEvents fired)
+-- ============================================
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if method == "FireServer" or method == "InvokeServer" then
         local args = {...}
-        
-        -- If Silent Aim is on, and we have a cached target, manipulate the bullet
-        if not checkcaller() and State.SilentAim_Enabled and State.CachedSilentTarget and self == workspace then
-            local targetChar = State.CachedSilentTarget.Character
-            if targetChar then
-                local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
-                if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
-                
-                if targetPart then
-                    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" or method == "FindPartOnRayWithWhitelist" then
-                        local origin = args[1].Origin
-                        local oldDir = args[1].Direction
-                        local newDir = (targetPart.Position - origin)
-                        -- Preserve bullet magnitude to prevent gun breaking
-                        if oldDir.Magnitude > 0 then
-                            newDir = newDir.Unit * oldDir.Magnitude
-                        end
-                        args[1] = Ray.new(origin, newDir)
-                    elseif method == "Raycast" then
-                        local origin = args[1]
-                        local oldDir = args[2]
-                        local newDir = (targetPart.Position - origin)
-                        if oldDir and oldDir.Magnitude > 0 then
-                            newDir = newDir.Unit * oldDir.Magnitude
-                        end
-                        args[2] = newDir
-                    end
-                end
-            end
+        local argString = ""
+        for i, v in pairs(args) do
+            argString = argString .. tostring(v) .. " | "
         end
-        return OldNamecall(self, unpack(args))
-    end)
+        print(string.format("[REMOTE SPY] %s -> %s\nArgs: %s", method, tostring(self), argString))
+    end
+    return oldNamecall(self, ...)
 end)
+print("[+] Remote Spy Active! Shoot your gun and check F9 console.")
 
--- Main Render Loop (Using Heartbeat for camera priority)
-RunService.Heartbeat:Connect(function()
-    -- 1. Find target for standard Aimbot
-    State.CurrentTarget = getClosestPlayer()
-
-    -- 2. Cache target for Silent Aim. 
-    -- If someone is in FOV, lock onto them. If no one is in FOV, keep the last person locked!
-    if State.CurrentTarget then
-        State.CachedSilentTarget = State.CurrentTarget
-    end
-
-    -- FOV Circle Update
-    if State.Aimbot_ShowFOV and (State.Aimbot_Mode ~= "Off" or State.SilentAim_Enabled) then
-        FOVCircle.Visible = true
-        local size = State.Aimbot_FOV * 2
-        FOVCircle.Size = UDim2.fromOffset(size, size)
-        FOVCircle.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
-        if State.Aimbot_RainbowFOV then
-            local hue = tick() % 5 / 5
-            FOVStroke.Color = Color3.fromHSV(hue, 1, 1)
-        else
-            FOVStroke.Color = State.Aimbot_FOVColor
-        end
-    else
-        FOVCircle.Visible = false
-    end
-
-    -- Aimbot Update (Forced on Heartbeat so game can't fight it)
-    local aimbotActive = false
-    if State.Aimbot_Mode == "Always" then
-        aimbotActive = true
-    elseif State.Aimbot_Mode == "Toggle (Press F)" then
-        aimbotActive = State.Aimbot_ToggleActive
-    elseif State.Aimbot_Mode == "Hold (Right Mouse)" then
-        aimbotActive = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-    end
-
-    if aimbotActive and State.CurrentTarget then
-        local targetChar = State.CurrentTarget.Character
-        if targetChar then
-            local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
-            if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
-            if not targetPart then targetPart = targetChar:FindFirstChild("HumanoidRootPart") end
-
-            if targetPart then
-                local targetPos = targetPart.Position
-                local camPos = Cam.CFrame.Position
-                -- Prevent CFrame.lookAt from crashing if distance is 0
-                if (targetPos - camPos).Magnitude > 0.1 then
-                    local targetCFrame = CFrame.lookAt(camPos, targetPos)
-                    -- 0 = Instant, 1 = Very Fast, 20 = Smooth
-                    if State.Aimbot_Smooth == 0 then
-                        Cam.CFrame = targetCFrame
-                    else
-                        -- Alpha = 1 / Smoothness. If Smoothness is 1, Alpha is 1 (Instant). If 20, Alpha is 0.05 (Smooth)
-                        local alpha = 1 / State.Aimbot_Smooth
-                        Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
-                    end
-                end
-            end
-        end
-    end
-
-    -- Local Player Loops (Anti-Cheat Safe)
-    if LP.Character then
-        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
-        
-        if hum and hrp then
-            if State.Speed_Enabled then
-                if hum.WalkSpeed ~= State.Speed_Amt then
-                    hum.WalkSpeed = State.Speed_Amt
-                end
-            else
-                if hum.WalkSpeed ~= 16 then
-                    hum.WalkSpeed = 16
-                end
-            end
-
-            if State.Fly_Enabled then
-                if not hum.PlatformStand then hum.PlatformStand = true end
-                local d = Vector3.new(0,0,0)
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Cam.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Cam.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then d = d - Cam.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then d = d + Cam.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then d = d + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then d = d - Vector3.new(0, 1, 0) end
-                
-                if d.Magnitude > 0 then
-                    hrp.AssemblyLinearVelocity = d.Unit * State.Fly_Speed
-                else
-                    hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
-                end
-                hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Cam.CFrame.LookVector)
-            else
-                if hum.PlatformStand then hum.PlatformStand = false end
-            end
-        end
-    end
-
-    -- ESP Update
-    if not State.ESP_Enabled then
-        return
+-- ============================================
+-- 2. SCRIPT DECOMPILER (Dumps Local & Module scripts)
+-- ============================================
+local function decompileScript(scriptObj)
+    if not decompile then 
+        print("[ERROR] Your executor does not support 'decompile()'")
+        return nil
     end
     
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP then
-            if not State.ESP_Objects[player] then
-                createESP(player)
-            end
+    local success, source = pcall(function()
+        return decompile(scriptObj)
+    end)
+    
+    if success and source then
+        return source
+    end
+    return nil
+end
 
-            local obj = State.ESP_Objects[player]
-            if player.Character then
-                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                local head = player.Character:FindFirstChild("Head")
-                local hum = player.Character:FindFirstChildOfClass("Humanoid")
-                
-                if hrp and head and hum then
-                    local headScreen, onScreen = Cam:WorldToViewportPoint(head.Position)
-                    
-                    if onScreen then
-                        local legScreen = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-                        local height = math.abs(headScreen.Y - legScreen.Y)
-                        if height < 10 then
-                            height = 10
-                        end
-                        local width = height / 2
+local scriptCount = 0
+local gunScripts = {}
 
-                        if State.ESP_Rainbow then
-                            local hue = tick() % 5 / 5
-                            local color = Color3.fromHSV(hue, 1, 1)
-                            obj.Box.UIStroke.Color = color
-                            obj.Name.TextColor3 = color
-                            obj.Tracer.BackgroundColor3 = color
-                        else
-                            obj.Box.UIStroke.Color = State.ESP_BoxColor
-                            obj.Name.TextColor3 = State.ESP_NameColor
-                            obj.Tracer.BackgroundColor3 = State.ESP_TracerColor
-                        end
+print("\n[+] Scanning game for client scripts...")
 
-                        obj.Box.Position = UDim2.fromOffset(headScreen.X - width/2, headScreen.Y)
-                        obj.Box.Size = UDim2.fromOffset(width, height)
-                        obj.Box.Visible = State.ESP_Box
-
-                        if State.ESP_HeadDot then
-                            obj.HeadDot.Position = UDim2.fromOffset(headScreen.X, headScreen.Y)
-                            obj.HeadDot.Visible = true
-                        else
-                            obj.HeadDot.Visible = false
-                        end
-
-                        if State.ESP_Name then
-                            obj.Name.Position = UDim2.fromOffset(headScreen.X, headScreen.Y - 15)
-                            obj.Name.Text = player.Name
-                            obj.Name.Visible = true
-                        else
-                            obj.Name.Visible = false
-                        end
-
-                        if State.ESP_Distance then
-                            local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-                            local dist = 0
-                            if myHrp then
-                                dist = math.floor((myHrp.Position - hrp.Position).Magnitude)
-                            end
-                            obj.Dist.Position = UDim2.fromOffset(headScreen.X, headScreen.Y - 30)
-                            obj.Dist.Text = dist .. "m"
-                            obj.Dist.Visible = true
-                        else
-                            obj.Dist.Visible = false
-                        end
-
-                        if State.ESP_Health then
-                            local hp = hum.Health / hum.MaxHealth
-                            obj.HealthBg.Position = UDim2.fromOffset(headScreen.X - width/2 - 5, headScreen.Y)
-                            obj.HealthBg.Size = UDim2.new(0, 3, 0, height)
-                            obj.HealthFill.Size = UDim2.new(1, 0, hp, 0)
-                            obj.HealthFill.BackgroundColor3 = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
-                            obj.HealthBg.Visible = true
-                        else
-                            obj.HealthBg.Visible = false
-                        end
-
-                        if State.ESP_Tracers then
-                            local p1 = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
-                            local p2 = Vector2.new(headScreen.X, headScreen.Y)
-                            drawLine(obj.Tracer, p1, p2)
-                        else
-                            obj.Tracer.Visible = false
-                        end
-
-                        if State.ESP_Skeleton then
-                            for _, line in pairs(obj.Skeleton) do
-                                line.Visible = false
-                            end
-                            
-                            local bones = {
-                                {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
-                                {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
-                                {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
-                                {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
-                                {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
-                            }
-                            
-                            if not player.Character:FindFirstChild("UpperTorso") then
-                                bones = {
-                                    {"Head", "Torso"},
-                                    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
-                                    {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
-                                }
-                            end
-
-                            local lineIdx = 1
-                            for _, bone in pairs(bones) do
-                                local part1 = player.Character:FindFirstChild(bone[1])
-                                local part2 = player.Character:FindFirstChild(bone[2])
-                                if part1 and part2 then
-                                    local p1, on1 = Cam:WorldToViewportPoint(part1.Position)
-                                    local p2, on2 = Cam:WorldToViewportPoint(part2.Position)
-                                    if on1 and on2 and p1.Z > 0 and p2.Z > 0 then
-                                        if obj.Skeleton[lineIdx] then
-                                            drawLine(obj.Skeleton[lineIdx], Vector2.new(p1.X, p1.Y), Vector2.new(p2.X, p2.Y))
-                                        end
-                                    end
-                                    lineIdx = lineIdx + 1
-                                end
-                            end
-                        else
-                            for _, line in pairs(obj.Skeleton) do
-                                line.Visible = false
-                            end
-                        end
-                    else
-                        obj.Box.Visible = false
-                        obj.Name.Visible = false
-                        obj.Dist.Visible = false
-                        obj.HealthBg.Visible = false
-                        obj.Tracer.Visible = false
-                        obj.HeadDot.Visible = false
-                        for _, line in pairs(obj.Skeleton) do
-                            line.Visible = false
-                        end
-                    end
-                else
-                    obj.Box.Visible = false
-                    obj.Name.Visible = false
-                    obj.Dist.Visible = false
-                    obj.HealthBg.Visible = false
-                    obj.Tracer.Visible = false
-                    obj.HeadDot.Visible = false
-                    for _, line in pairs(obj.Skeleton) do
-                        line.Visible = false
-                    end
-                end
-            else
-                obj.Box.Visible = false
-                obj.Name.Visible = false
-                obj.Dist.Visible = false
-                obj.HealthBg.Visible = false
-                obj.Tracer.Visible = false
-                obj.HeadDot.Visible = false
-                for _, line in pairs(obj.Skeleton) do
-                    line.Visible = false
-                end
+for _, obj in pairs(game:GetDescendants()) do
+    if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+        scriptCount = scriptCount + 1
+        local src = decompileScript(obj)
+        if src then
+            -- Look for gun-related keywords to find the shooting script
+            local lowerSrc = string.lower(src)
+            if string.find(lowerSrc, "raycast") or string.find(lowerSrc, "firearm") or string.find(lowerSrc, "bullet") or string.find(lowerSrc, "shoot") or string.find(lowerSrc, "fireserver") then
+                table.insert(gunScripts, {Name = obj:GetFullName(), Source = src})
             end
         end
     end
-end)
+end
 
--- UI SETUP
-local WindowConfig = {
-    Name = "Universal Hub",
-    LoadingTitle = "Universal Hub",
-    LoadingSubtitle = "Advanced Edition",
-    ConfigurationSaving = { Enabled = false },
-    KeySystem = false
-}
-local Window = Rayfield:CreateWindow(WindowConfig)
+print(string.format("[+] Scanned %d scripts.", scriptCount))
+print(string.format("[+] Found %d potential gun/combat scripts.", #gunScripts))
 
-local TabLocal = Window:CreateTab("Local", 4483362458)
-local TabESP = Window:CreateTab("ESP", 4483362458)
-local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
-local TabMisc = Window:CreateTab("Misc", 4483362458)
+print("\n====================================")
+print("POTENTIAL COMBAT/GUN SCRIPTS FOUND:")
+print("====================================")
 
-TabLocal:CreateToggle({
-    Name = "Enable Fly",
-    CurrentValue = false,
-    Callback = function(Value) State.Fly_Enabled = Value end
-})
-TabLocal:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10, 500},
-    Increment = 1,
-    CurrentValue = 50,
-    Callback = function(Value) State.Fly_Speed = Value end
-})
-TabLocal:CreateToggle({
-    Name = "Enable Speed",
-    CurrentValue = false,
-    Callback = function(Value) State.Speed_Enabled = Value end
-})
-TabLocal:CreateSlider({
-    Name = "Speed Amount",
-    Range = {16, 500},
-    Increment = 1,
-    CurrentValue = 50,
-    Callback = function(Value) State.Speed_Amt = Value end
-})
-TabLocal:CreateToggle({
-    Name = "Infinite Jump",
-    CurrentValue = false,
-    Callback = function(Value) State.InfJump_Enabled = Value end
-})
-
-TabESP:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_Enabled = Value end
-})
-TabESP:CreateToggle({
-    Name = "Box ESP",
-    CurrentValue = true,
-    Callback = function(Value) State.ESP_Box = Value end
-})
-TabESP:CreateToggle({
-    Name = "Name ESP",
-    CurrentValue = true,
-    Callback = function(Value) State.ESP_Name = Value end
-})
-TabESP:CreateToggle({
-    Name = "Distance ESP",
-    CurrentValue = true,
-    Callback = function(Value) State.ESP_Distance = Value end
-})
-TabESP:CreateToggle({
-    Name = "Health Bar ESP",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_Health = Value end
-})
-TabESP:CreateToggle({
-    Name = "Tracers",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_Tracers = Value end
-})
-TabESP:CreateToggle({
-    Name = "Skeleton ESP",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_Skeleton = Value end
-})
-TabESP:CreateToggle({
-    Name = "Head Dot",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_HeadDot = Value end
-})
-TabESP:CreateToggle({
-    Name = "Rainbow ESP",
-    CurrentValue = false,
-    Callback = function(Value) State.ESP_Rainbow = Value end
-})
-TabESP:CreateColorPicker({
-    Name = "Box Color",
-    Color = Color3.fromRGB(255, 0, 0),
-    Callback = function(Value) State.ESP_BoxColor = Value end
-})
-TabESP:CreateColorPicker({
-    Name = "Name Color",
-    Color = Color3.fromRGB(255, 255, 255),
-    Callback = function(Value) State.ESP_NameColor = Value end
-})
-TabESP:CreateColorPicker({
-    Name = "Tracer Color",
-    Color = Color3.fromRGB(255, 255, 255),
-    Callback = function(Value) State.ESP_TracerColor = Value end
-})
-
-TabAimbot:CreateDropdown({
-    Name = "Aimbot Mode",
-    Options = {"Off", "Always", "Toggle (Press F)", "Hold (Right Mouse)"},
-    CurrentOption = "Off",
-    Callback = function(Value) State.Aimbot_Mode = Value end
-})
-TabAimbot:CreateToggle({
-    Name = "Enable Silent Aim",
-    CurrentValue = false,
-    Callback = function(Value) State.SilentAim_Enabled = Value end
-})
-TabAimbot:CreateDropdown({
-    Name = "Target Part",
-    Options = {"Head", "HumanoidRootPart", "Torso", "UpperTorso"},
-    CurrentOption = "Head",
-    Callback = function(Value) State.Aimbot_TargetPart = Value end
-})
-TabAimbot:CreateSlider({
-    Name = "Aimbot FOV",
-    Range = {10, 500},
-    Increment = 1,
-    CurrentValue = 120,
-    Callback = function(Value) State.Aimbot_FOV = Value end
-})
-TabAimbot:CreateSlider({
-    Name = "Smoothness (0 = Instant, 1 = Fast, 20 = Smooth)",
-    Range = {0, 20},
-    Increment = 1,
-    CurrentValue = 0,
-    Callback = function(Value) State.Aimbot_Smooth = Value end
-})
-TabAimbot:CreateToggle({
-    Name = "Wall Check",
-    CurrentValue = true,
-    Callback = function(Value) State.Aimbot_WallCheck = Value end
-})
-TabAimbot:CreateToggle({
-    Name = "Team Check",
-    CurrentValue = true,
-    Callback = function(Value) State.Aimbot_TeamCheck = Value end
-})
-TabAimbot:CreateToggle({
-    Name = "Show FOV Circle",
-    CurrentValue = true,
-    Callback = function(Value) State.Aimbot_ShowFOV = Value end
-})
-TabAimbot:CreateToggle({
-    Name = "Rainbow FOV",
-    CurrentValue = false,
-    Callback = function(Value) State.Aimbot_RainbowFOV = Value end
-})
-TabAimbot:CreateColorPicker({
-    Name = "FOV Circle Color",
-    Color = Color3.fromRGB(255, 255, 255),
-    Callback = function(Value) State.Aimbot_FOVColor = Value end
-})
-
-TabMisc:CreateButton({
-    Name = "Unload Script (Dead Switch)",
-    Callback = function()
-        pcall(function() RunService:UnbindFromRenderStep("UniversalHubLoop") end)
-        for player, obj in pairs(State.ESP_Objects) do
-            obj.Frame:Destroy()
-        end
-        State.ESP_Objects = {}
-        if ESPGui then ESPGui:Destroy() end
-        Rayfield:Destroy()
+for i, data in pairs(gunScripts) do
+    print("\n------------------------------------------------")
+    print("SCRIPT PATH: " .. data.Name)
+    print("------------------------------------------------")
+    -- Only print first 2000 characters to avoid console lag
+    if #data.Source > 2000 then
+        print(string.sub(data.Source, 1, 2000) .. "\n... [TRUNCATED. Full source printed below if smaller]")
+    else
+        print(data.Source)
     end
-})
+end
 
-Rayfield:Notify({
-    Title = "Universal Hub",
-    Content = "Loaded successfully! Press RightCtrl to toggle UI.",
-    Duration = 3
-})
+print("\n====================================")
+print("SCAN COMPLETE. Check your F9 Developer Console!")
+print("Look for the script that handles 'Raycast' or 'FireServer' for the gun.")
+print("====================================")
