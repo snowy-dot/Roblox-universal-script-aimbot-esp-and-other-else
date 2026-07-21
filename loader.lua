@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION V7 (SCANNER INCLUDED)
+-- UNIVERSAL HUB: GAME SPECIFIC SILENT AIM (V8)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -69,10 +69,6 @@ State.Fly_Speed = 50
 State.Speed_Enabled = false
 State.Speed_Amt = 50
 State.InfJump_Enabled = false
-
-State.Scanner_Dropdown = nil
-State.FoundScripts = {}
-State.SpyActive = false
 
 -- Visuals Setup
 local ESPGui = Instance.new("ScreenGui")
@@ -220,7 +216,7 @@ local function drawLine(lineFrame, p1, p2)
     lineFrame.Visible = true
 end
 
--- Aimbot Logic
+-- Target Finding Logic
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDist = State.Aimbot_FOV
@@ -288,124 +284,52 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Silent Aim Hook
+-- ============================================
+-- GAME SPECIFIC SILENT AIM HOOK
+-- ============================================
 pcall(function()
-    local OldNamecall
-    OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        
-        if not checkcaller() and State.SilentAim_Enabled and State.CachedSilentTarget and self == workspace then
-            local targetChar = State.CachedSilentTarget.Character
-            if targetChar then
-                local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
-                if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
+    -- Require the game's WeaponManager module
+    local WeaponManager = require(game:GetService("ReplicatedStorage").Common.Managers.WeaponManager)
+    local OldCast = WeaponManager.cast
+    
+    -- Hook the cast function
+    WeaponManager.cast = function(origin, direction, speed, maxDist, ignoreList, callbacks, ...)
+        if State.SilentAim_Enabled and State.CachedSilentTarget then
+            local target = State.CachedSilentTarget.Character
+            if target then
+                local targetPart = target:FindFirstChild(State.Aimbot_TargetPart)
+                if not targetPart then targetPart = target:FindFirstChild("Head") end
+                if not targetPart then targetPart = target:FindFirstChild("HumanoidRootPart") end
                 
                 if targetPart then
-                    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" or method == "FindPartOnRayWithWhitelist" then
-                        local origin = args[1].Origin
-                        local oldDir = args[1].Direction
-                        local newDir = (targetPart.Position - origin)
-                        if oldDir.Magnitude > 0 then
-                            newDir = newDir.Unit * oldDir.Magnitude
+                    -- Calculate new direction to the target
+                    local newDir = (targetPart.Position - origin).Unit
+                    
+                    -- Copy callbacks to modify them
+                    local oldCallbacks = callbacks or {}
+                    local newCallbacks = {}
+                    for k, v in pairs(oldCallbacks) do newCallbacks[k] = v end
+                    
+                    -- Wrap onHitCharacter to bypass anti-cheat
+                    local oldOnHitCharacter = newCallbacks.onHitCharacter
+                    newCallbacks.onHitCharacter = function(hitChar, hitPart, raycastResult, activeCast)
+                        -- Restore the original direction so the anti-cheat check passes
+                        if activeCast then
+                            activeCast.direction = direction
                         end
-                        args[1] = Ray.new(origin, newDir)
-                    elseif method == "Raycast" then
-                        local origin = args[1]
-                        local oldDir = args[2]
-                        local newDir = (targetPart.Position - origin)
-                        if oldDir and oldDir.Magnitude > 0 then
-                            newDir = newDir.Unit * oldDir.Magnitude
+                        if oldOnHitCharacter then
+                            return oldOnHitCharacter(hitChar, hitPart, raycastResult, activeCast)
                         end
-                        args[2] = newDir
                     end
+                    
+                    -- Fire the bullet with the new direction but original callbacks
+                    return OldCast(origin, newDir, speed, maxDist, ignoreList, newCallbacks, ...)
                 end
             end
         end
-        return OldNamecall(self, unpack(args))
-    end)
+        return OldCast(origin, direction, speed, maxDist, ignoreList, callbacks, ...)
+    end
 end)
-
--- Scanner Logic
-local function copyScriptToClipboard(scriptName)
-    for _, data in pairs(State.FoundScripts) do
-        if data.Name == scriptName then
-            if setclipboard then
-                setclipboard(data.Source)
-                Rayfield:Notify({
-                    Title = "Copied",
-                    Content = "Script copied to your clipboard!",
-                    Duration = 3
-                })
-            else
-                print(data.Source)
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "setclipboard not supported. Printed to F9.",
-                    Duration = 3
-                })
-            end
-            return
-        end
-    end
-end
-
-local function scanGameForScripts()
-    State.FoundScripts = {}
-    local scriptNames = {"None"}
-
-    if not decompile then
-        Rayfield:Notify({
-            Title = "Error",
-            Content = "Your executor does not support decompile()",
-            Duration = 3
-        })
-        return
-    end
-
-    Rayfield:Notify({
-        Title = "Scanning",
-        Content = "Scanning game scripts... UI may freeze briefly.",
-        Duration = 3
-    })
-
-    for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            local success, source = pcall(function()
-                return decompile(obj)
-            end)
-            
-            if success and source then
-                local lowerSrc = string.lower(source)
-                local isGunScript = false
-                
-                if string.find(lowerSrc, "raycast") then isGunScript = true end
-                if string.find(lowerSrc, "firearm") then isGunScript = true end
-                if string.find(lowerSrc, "bullet") then isGunScript = true end
-                if string.find(lowerSrc, "shoot") then isGunScript = true end
-                if string.find(lowerSrc, "fireserver") then isGunScript = true end
-                
-                if isGunScript then
-                    table.insert(State.FoundScripts, {
-                        Name = obj:GetFullName(),
-                        Source = source
-                    })
-                    table.insert(scriptNames, obj:GetFullName())
-                end
-            end
-        end
-    end
-
-    if State.Scanner_Dropdown then
-        State.Scanner_Dropdown:Refresh(scriptNames)
-    end
-    
-    Rayfield:Notify({
-        Title = "Scan Complete",
-        Content = "Found " .. #State.FoundScripts .. " potential scripts.",
-        Duration = 3
-    })
-end
 
 -- Main Render Loop
 RunService.Heartbeat:Connect(function()
@@ -671,7 +595,7 @@ end)
 local WindowConfig = {
     Name = "Universal Hub",
     LoadingTitle = "Universal Hub",
-    LoadingSubtitle = "Advanced Edition",
+    LoadingSubtitle = "Game Specific Edition",
     ConfigurationSaving = { Enabled = false },
     KeySystem = false
 }
@@ -680,7 +604,6 @@ local Window = Rayfield:CreateWindow(WindowConfig)
 local TabLocal = Window:CreateTab("Local", 4483362458)
 local TabESP = Window:CreateTab("ESP", 4483362458)
 local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
-local TabScanner = Window:CreateTab("Scanner", 4483362458)
 local TabMisc = Window:CreateTab("Misc", 4483362458)
 
 TabLocal:CreateToggle({
@@ -781,7 +704,7 @@ TabAimbot:CreateDropdown({
     Callback = function(Value) State.Aimbot_Mode = Value end
 })
 TabAimbot:CreateToggle({
-    Name = "Enable Silent Aim",
+    Name = "Enable Silent Aim (Game Specific)",
     CurrentValue = false,
     Callback = function(Value) State.SilentAim_Enabled = Value end
 })
@@ -831,44 +754,6 @@ TabAimbot:CreateColorPicker({
     Callback = function(Value) State.Aimbot_FOVColor = Value end
 })
 
--- Scanner Tab
-TabScanner:CreateButton({
-    Name = "Scan Game for Gun/Combat Scripts",
-    Callback = function()
-        scanGameForScripts()
-    end
-})
-
-local ScannerDropdownConfig = {
-    Name = "Found Scripts (Click to Copy)",
-    Options = {"None"},
-    CurrentOption = "None",
-    Callback = function(Value)
-        if Value ~= "None" then
-            copyScriptToClipboard(Value)
-        end
-    end
-}
-State.Scanner_Dropdown = TabScanner:CreateDropdown(ScannerDropdownConfig)
-
-TabScanner:CreateButton({
-    Name = "Copy All Found Scripts to Clipboard",
-    Callback = function()
-        local allScripts = ""
-        for _, data in pairs(State.FoundScripts) do
-            allScripts = allScripts .. "=== " .. data.Name .. " ===\n" .. data.Source .. "\n\n"
-        end
-        if setclipboard then
-            setclipboard(allScripts)
-            Rayfield:Notify({
-                Title = "Copied All",
-                Content = "All scripts copied to clipboard!",
-                Duration = 3
-            })
-        end
-    end
-})
-
 TabMisc:CreateButton({
     Name = "Unload Script (Dead Switch)",
     Callback = function()
@@ -884,6 +769,6 @@ TabMisc:CreateButton({
 
 Rayfield:Notify({
     Title = "Universal Hub",
-    Content = "Loaded successfully! Press RightCtrl to toggle UI.",
+    Content = "Game Specific Silent Aim Loaded! Press RightCtrl to toggle UI.",
     Duration = 3
 })
