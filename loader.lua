@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ESP & AIMBOT (SKELETON & HEALTH ADDED)
+-- UNIVERSAL HUB: ESP & AIMBOT (CENTER LOCK FIX)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -45,6 +45,7 @@ State.ESP_Skeleton = false
 State.ESP_Objects = {}
 
 State.Aimbot_Mode = "Off"
+State.Aimbot_ToggleActive = false
 State.Aimbot_FOV = 120
 State.Aimbot_Smooth = 5
 State.Aimbot_WallCheck = true
@@ -143,7 +144,6 @@ local function createESP(player)
     tracer.Visible = false
     tracer.Parent = frame
 
-    -- Skeleton Lines (14 lines per player)
     local skeletonLines = {}
     for i = 1, 14 do
         local line = Instance.new("Frame")
@@ -187,11 +187,11 @@ local function drawLine(lineFrame, p1, p2)
     lineFrame.Visible = true
 end
 
--- Aimbot Logic
+-- Aimbot Logic (Locks to Screen Center)
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDist = State.Aimbot_FOV
-    local mousePos = UserInputService:GetMouseLocation() - Vector2.new(0, 36)
+    local screenCenter = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
@@ -208,7 +208,8 @@ local function getClosestPlayer()
                 if head and targetHrp and myHrp then
                     local screenPos, onScreen = Cam:WorldToViewportPoint(head.Position)
                     if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        -- Calculate distance from screen center
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
                         if dist < shortestDist then
                             local visible = true
                             if State.Aimbot_WallCheck then
@@ -234,6 +235,16 @@ local function getClosestPlayer()
     return closestPlayer
 end
 
+-- Toggle Keybind (F Key)
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        if State.Aimbot_Mode == "Toggle (Press F)" then
+            State.Aimbot_ToggleActive = not State.Aimbot_ToggleActive
+        end
+    end
+end)
+
 -- Main Render Loop
 RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
     -- FOV Circle Update
@@ -250,8 +261,8 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
     local aimbotActive = false
     if State.Aimbot_Mode == "Always" then
         aimbotActive = true
-    elseif State.Aimbot_Mode == "Hold (Right Mouse)" then
-        aimbotActive = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+    elseif State.Aimbot_Mode == "Toggle (Press F)" then
+        aimbotActive = State.Aimbot_ToggleActive
     end
 
     if aimbotActive then
@@ -259,6 +270,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
         if target and target.Character then
             local targetHead = target.Character:FindFirstChild("Head")
             if targetHead then
+                -- 10 = Fast, 1 = Sticky. Alpha = Smoothness / 10
                 local alpha = State.Aimbot_Smooth / 10
                 local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetHead.Position)
                 Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
@@ -345,12 +357,10 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
 
                         -- Skeleton ESP
                         if State.ESP_Skeleton then
-                            -- Hide all first
                             for _, line in pairs(obj.Skeleton) do
                                 line.Visible = false
                             end
                             
-                            -- R15 / R6 Universal Bones
                             local bones = {
                                 {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
                                 {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
@@ -359,7 +369,6 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                                 {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
                             }
                             
-                            -- R6 Fallback
                             if not player.Character:FindFirstChild("UpperTorso") then
                                 bones = {
                                     {"Head", "Torso"},
@@ -504,7 +513,7 @@ TabESP:CreateToggle(ESPSkelConfig)
 -- Aimbot Tab
 local AimbotModeConfig = {
     Name = "Aimbot Mode",
-    Options = {"Off", "Always", "Hold (Right Mouse)"},
+    Options = {"Off", "Always", "Toggle (Press F)"},
     CurrentOption = "Off",
     Callback = function(Value)
         State.Aimbot_Mode = Value
