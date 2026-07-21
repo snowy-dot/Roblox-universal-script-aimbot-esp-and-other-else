@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION V2
+-- UNIVERSAL HUB: ADVANCED EDITION V3
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -52,7 +52,7 @@ State.ESP_Objects = {}
 State.Aimbot_Mode = "Off"
 State.Aimbot_ToggleActive = false
 State.Aimbot_FOV = 120
-State.Aimbot_Smooth = 1
+State.Aimbot_Smooth = 0 -- 0 = Instant Snap
 State.Aimbot_WallCheck = true
 State.Aimbot_TeamCheck = true
 State.Aimbot_ShowFOV = true
@@ -61,6 +61,7 @@ State.Aimbot_RainbowFOV = false
 State.Aimbot_FOVColor = Color3.fromRGB(255, 255, 255)
 
 State.SilentAim_Enabled = false
+State.CurrentTarget = nil -- Cached target for silent aim
 
 State.Fly_Enabled = false
 State.Fly_Speed = 50
@@ -215,7 +216,7 @@ local function drawLine(lineFrame, p1, p2)
     lineFrame.Visible = true
 end
 
--- Aimbot/Silent Aim Target Logic
+-- Aimbot/Silent Aim Target Logic (Cached)
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDist = State.Aimbot_FOV
@@ -229,7 +230,6 @@ local function getClosestPlayer()
             end
 
             if not isTeam then
-                -- Fallback chain to ensure we always find a valid part
                 local targetPart = player.Character:FindFirstChild(State.Aimbot_TargetPart)
                 if not targetPart then targetPart = player.Character:FindFirstChild("Head") end
                 if not targetPart then targetPart = player.Character:FindFirstChild("HumanoidRootPart") end
@@ -285,23 +285,22 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Silent Aim Hook (Fixed Math)
+-- Silent Aim Hook (Lightning Fast)
 pcall(function()
     local OldNamecall
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
         
-        if State.SilentAim_Enabled and self == workspace then
-            local target = getClosestPlayer()
-            if target and target.Character then
-                -- Fallback for silent aim target part
-                local targetPart = target.Character:FindFirstChild(State.Aimbot_TargetPart)
-                if not targetPart then targetPart = target.Character:FindFirstChild("Head") end
-                if not targetPart then targetPart = target.Character:FindFirstChild("HumanoidRootPart") end
+        if State.SilentAim_Enabled and State.CurrentTarget and self == workspace then
+            local targetChar = State.CurrentTarget.Character
+            if targetChar then
+                local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
+                if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
+                if not targetPart then targetPart = targetChar:FindFirstChild("HumanoidRootPart") end
                 
                 if targetPart then
-                    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+                    if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" or method == "FindPartOnRayWithWhitelist" then
                         local origin = args[1].Origin
                         local direction = (targetPart.Position - origin)
                         args[1] = Ray.new(origin, direction)
@@ -319,6 +318,9 @@ end)
 
 -- Main Render Loop
 RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    -- Cache target every frame for both Aimbot and Silent Aim
+    State.CurrentTarget = getClosestPlayer()
+
     -- FOV Circle Update
     if State.Aimbot_ShowFOV and (State.Aimbot_Mode ~= "Off" or State.SilentAim_Enabled) then
         FOVCircle.Visible = true
@@ -345,18 +347,17 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
         aimbotActive = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
     end
 
-    if aimbotActive then
-        local target = getClosestPlayer()
-        if target and target.Character then
-            -- Fallback for camera target part
-            local targetPart = target.Character:FindFirstChild(State.Aimbot_TargetPart)
-            if not targetPart then targetPart = target.Character:FindFirstChild("Head") end
-            if not targetPart then targetPart = target.Character:FindFirstChild("HumanoidRootPart") end
+    if aimbotActive and State.CurrentTarget then
+        local targetChar = State.CurrentTarget.Character
+        if targetChar then
+            local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
+            if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
+            if not targetPart then targetPart = targetChar:FindFirstChild("HumanoidRootPart") end
 
             if targetPart then
                 local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetPart.Position)
-                -- 1 = Instant Snap, 10 = Very Smooth
-                if State.Aimbot_Smooth == 1 then
+                -- 0 = Instant Snap, 20 = Very Smooth
+                if State.Aimbot_Smooth == 0 then
                     Cam.CFrame = targetCFrame
                 else
                     local alpha = 1 / State.Aimbot_Smooth
@@ -795,10 +796,10 @@ local AimbotFOVConfig = {
 TabAimbot:CreateSlider(AimbotFOVConfig)
 
 local AimbotSmoothConfig = {
-    Name = "Smoothness (1 = Instant Snap, 10 = Smooth)",
-    Range = {1, 10},
+    Name = "Smoothness (0 = Instant Snap, 20 = Smooth)",
+    Range = {0, 20},
     Increment = 1,
-    CurrentValue = 1,
+    CurrentValue = 0,
     Callback = function(Value)
         State.Aimbot_Smooth = Value
     end
