@@ -1,5 +1,6 @@
+--!nocheck
 -- ============================================
--- UNIVERSAL HUB V52 — RAYFIELD (CLEAN BUILD)
+-- UNIVERSAL HUB V53 — FULLY EXPANDED RAYFIELD
 -- ============================================
 
 local Players = game:GetService("Players")
@@ -12,37 +13,63 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local LP = Players.LocalPlayer
 
-if not LP then return end
+if not LP then
+    return
+end
+
 local Cam = workspace.CurrentCamera
 
 -- ============================================
 -- LOAD RAYFIELD UI
 -- ============================================
 local Rayfield = nil
-pcall(function() Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))() end)
+pcall(function()
+    local response = game:HttpGet('https://sirius.menu/rayfield')
+    local func = loadstring(response)
+    if func then
+        Rayfield = func()
+    end
+end)
+
 if not Rayfield then
-    pcall(function() Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))() end)
+    pcall(function()
+        local response = game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua')
+        local func = loadstring(response)
+        if func then
+            Rayfield = func()
+        end
+    end)
 end
 
 if not Rayfield then
     local g = Instance.new("ScreenGui")
-    local f = Instance.new("Frame", g)
+    local f = Instance.new("Frame")
+    f.Parent = g
     f.Size = UDim2.new(0, 300, 0, 100)
     f.Position = UDim2.new(0.5, -150, 0.5, -50)
-    f.BackgroundColor3 = Color3.new(0,0,0)
+    f.BackgroundColor3 = Color3.new(0, 0, 0)
     f.BackgroundTransparency = 0.2
     
-    local t = Instance.new("TextLabel", f)
-    t.Size = UDim2.new(1,0,1,0)
+    local t = Instance.new("TextLabel")
+    t.Parent = f
+    t.Size = UDim2.new(1, 0, 1, 0)
     t.Text = "Rayfield UI failed to load.\nCheck your internet or executor."
-    t.TextColor3 = Color3.new(1,1,1)
+    t.TextColor3 = Color3.new(1, 1, 1)
     t.BackgroundTransparency = 1
     t.Font = Enum.Font.GothamBold
     t.TextSize = 14
     
-    pcall(function() g.Parent = gethui() end)
-    if not g.Parent then pcall(function() g.Parent = CoreGui end) end
-    if not g.Parent then g.Parent = LP:WaitForChild("PlayerGui") end
+    pcall(function()
+        g.Parent = gethui()
+    end)
+    if not g.Parent then
+        pcall(function()
+            g.Parent = CoreGui
+        end)
+    end
+    if not g.Parent then
+        g.Parent = LP:WaitForChild("PlayerGui")
+    end
     return
 end
 
@@ -115,7 +142,7 @@ State.Connections = {}
 -- UI SETUP
 -- ============================================
 local WindowConfig = {
-    Name = "Universal Hub V52",
+    Name = "Universal Hub V53",
     LoadingTitle = "Universal Hub",
     LoadingSubtitle = "by Rayfield",
     ConfigurationSaving = { Enabled = false },
@@ -139,21 +166,35 @@ local StartFly
 
 local function UnloadScript()
     for _, conn in ipairs(State.Connections) do
-        pcall(function() conn:Disconnect() end)
+        pcall(function()
+            conn:Disconnect()
+        end)
     end
     State.Connections = {}
     
-    pcall(function() RunService:UnbindFromRenderStep("HubMainLoop") end)
-    pcall(function() RunService:UnbindFromRenderStep("FlyLoop") end)
+    pcall(function()
+        RunService:UnbindFromRenderStep("HubMainLoop")
+    end)
+    pcall(function()
+        RunService:UnbindFromRenderStep("FlyLoop")
+    end)
     
     for _, obj in pairs(State.ESP_Objects) do
-        if obj.Container then obj.Container:Destroy() end
+        if obj.Container then
+            obj.Container:Destroy()
+        end
     end
     State.ESP_Objects = {}
     
-    if FlingVisual then FlingVisual:Destroy() end
-    if AimbotFOVCircle then AimbotFOVCircle:Destroy() end
-    if ESPGui then ESPGui:Destroy() end
+    if FlingVisual then
+        FlingVisual:Destroy()
+    end
+    if AimbotFOVCircle then
+        AimbotFOVCircle:Destroy()
+    end
+    if ESPGui then
+        ESPGui:Destroy()
+    end
     
     if LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
@@ -171,7 +212,9 @@ end
 -- Visuals Setup
 pcall(function()
     local parent = CoreGui
-    if gethui then parent = gethui() end
+    if gethui then
+        parent = gethui()
+    end
     ESPGui = Instance.new("ScreenGui")
     ESPGui.Name = "ESP_Gui"
     ESPGui.ResetOnSpawn = false
@@ -195,12 +238,14 @@ AimbotFOVCircle.BackgroundTransparency = 1
 AimbotFOVCircle.BorderSizePixel = 0
 AimbotFOVCircle.Parent = ESPGui
 
-FOVStroke = Instance.new("UIStroke", AimbotFOVCircle)
+FOVStroke = Instance.new("UIStroke")
+FOVStroke.Parent = AimbotFOVCircle
 FOVStroke.Color = Color3.fromRGB(255, 255, 255)
 FOVStroke.Thickness = 1
 FOVStroke.Transparency = 0.5
 
-local corner = Instance.new("UICorner", AimbotFOVCircle)
+local corner = Instance.new("UICorner")
+corner.Parent = AimbotFOVCircle
 corner.CornerRadius = UDim.new(0, 120)
 AimbotFOVCircle.Visible = false
 
@@ -242,7 +287,9 @@ local function GetClosestPlayerToMouse()
                                     rayParams.FilterType = Enum.RaycastFilterType.Exclude
                                     rayParams.FilterDescendantsInstances = {LP.Character, player.Character}
                                     local result = workspace:Raycast(myHrp.Position, (head.Position - myHrp.Position).Unit * (head.Position - myHrp.Position).Magnitude, rayParams)
-                                    if result then visible = false end
+                                    if result then
+                                        visible = false
+                                    end
                                 end
                             end
                             if visible then
@@ -262,15 +309,21 @@ StopFly = function()
     State.Fly = false
     if LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
+        if hum then
+            hum.PlatformStand = false
+        end
     end
-    pcall(function() RunService:UnbindFromRenderStep("FlyLoop") end)
+    pcall(function()
+        RunService:UnbindFromRenderStep("FlyLoop")
+    end)
 end
 
 StartFly = function()
     local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
+    if not hrp or not hum then
+        return
+    end
     StopFly()
     State.Fly = true
     hum.PlatformStand = true
@@ -282,49 +335,70 @@ StartFly = function()
         end
         local charHrp = LP.Character:FindFirstChild("HumanoidRootPart")
         local charHum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if not charHrp or not charHum then return end
+        if not charHrp or not charHum then
+            return
+        end
         
         charHum.PlatformStand = true
         local d = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then d = d - Cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then d = d + Cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then d = d + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then d = d - Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            d = d + Cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            d = d - Cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            d = d - Cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            d = d + Cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            d = d + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            d = d - Vector3.new(0, 1, 0)
+        end
         
         if d.Magnitude > 0 then
             charHrp.AssemblyLinearVelocity = d.Unit * State.FlySpeed
         else
-            charHrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            charHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
     end)
 end
 
 local function CreateESPForPlayer(player)
-    if State.ESP_Objects[player] then return State.ESP_Objects[player] end
-    local container = Instance.new("Frame", ESPGui)
+    if State.ESP_Objects[player] then
+        return State.ESP_Objects[player]
+    end
+    local container = Instance.new("Frame")
+    container.Parent = ESPGui
     container.Name = "ESP_" .. player.Name
     container.BackgroundTransparency = 1
     container.Size = UDim2.new(1, 0, 1, 0)
     
-    local box = Instance.new("Frame", container)
+    local box = Instance.new("Frame")
+    box.Parent = container
     box.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
     box.BackgroundTransparency = 1
     box.BorderSizePixel = 0
     box.Visible = false
-    local boxStroke = Instance.new("UIStroke", box)
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Parent = box
     boxStroke.Color = Color3.fromRGB(255, 50, 50)
     boxStroke.Thickness = 1.5
     
-    local tracer = Instance.new("Frame", container)
+    local tracer = Instance.new("Frame")
+    tracer.Parent = container
     tracer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     tracer.BorderSizePixel = 0
     tracer.AnchorPoint = Vector2.new(0.5, 0.5)
     tracer.Size = UDim2.new(0, 1, 0, 1)
     tracer.Visible = false
     
-    local nameLbl = Instance.new("TextLabel", container)
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Parent = container
     nameLbl.BackgroundTransparency = 1
     nameLbl.TextColor3 = Color3.new(1, 1, 1)
     nameLbl.Font = Enum.Font.GothamBold
@@ -333,7 +407,8 @@ local function CreateESPForPlayer(player)
     nameLbl.AnchorPoint = Vector2.new(0.5, 1)
     nameLbl.Visible = false
     
-    local distLbl = Instance.new("TextLabel", container)
+    local distLbl = Instance.new("TextLabel")
+    distLbl.Parent = container
     distLbl.BackgroundTransparency = 1
     distLbl.TextColor3 = Color3.fromRGB(255, 255, 100)
     distLbl.Font = Enum.Font.Gotham
@@ -341,7 +416,8 @@ local function CreateESPForPlayer(player)
     distLbl.AnchorPoint = Vector2.new(0.5, 1)
     distLbl.Visible = false
     
-    local healthLbl = Instance.new("TextLabel", container)
+    local healthLbl = Instance.new("TextLabel")
+    healthLbl.Parent = container
     healthLbl.BackgroundTransparency = 1
     healthLbl.TextColor3 = Color3.fromRGB(100, 255, 100)
     healthLbl.Font = Enum.Font.Gotham
@@ -349,15 +425,27 @@ local function CreateESPForPlayer(player)
     healthLbl.AnchorPoint = Vector2.new(0.5, 1)
     healthLbl.Visible = false
     
-    local headDot = Instance.new("Frame", container)
+    local headDot = Instance.new("Frame")
+    headDot.Parent = container
     headDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     headDot.Size = UDim2.fromOffset(8, 8)
     headDot.BorderSizePixel = 0
     headDot.AnchorPoint = Vector2.new(0.5, 0.5)
     headDot.Visible = false
-    local hc = Instance.new("UICorner", headDot); hc.CornerRadius = UDim.new(0, 4)
+    local hc = Instance.new("UICorner")
+    hc.Parent = headDot
+    hc.CornerRadius = UDim.new(0, 4)
     
-    local obj = {Container = container, Box = box, Tracer = tracer, Name = nameLbl, Dist = distLbl, Health = healthLbl, HeadDot = headDot, BoxStroke = boxStroke}
+    local obj = {
+        Container = container,
+        Box = box,
+        Tracer = tracer,
+        Name = nameLbl,
+        Dist = distLbl,
+        Health = healthLbl,
+        HeadDot = headDot,
+        BoxStroke = boxStroke
+    }
     State.ESP_Objects[player] = obj
     return obj
 end
@@ -379,7 +467,9 @@ local function RenderESP()
                             if State.ESP_Box then
                                 local legPos = Cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
                                 local height = math.abs(headScreen.Y - legPos.Y)
-                                if height < 10 then height = 10 end
+                                if height < 10 then
+                                    height = 10
+                                end
                                 local width = height / 2
                                 esp.Box.Position = UDim2.fromOffset(headScreen.X - width/2, headScreen.Y)
                                 esp.Box.Size = UDim2.fromOffset(width, height)
@@ -400,7 +490,9 @@ local function RenderESP()
                                 esp.Tracer.Visible = false
                             end
                             esp.HeadDot.Visible = State.ESP_Head
-                            if State.ESP_Head then esp.HeadDot.Position = UDim2.fromOffset(headScreen.X, headScreen.Y) end
+                            if State.ESP_Head then
+                                esp.HeadDot.Position = UDim2.fromOffset(headScreen.X, headScreen.Y)
+                            end
                             
                             local textY = headScreen.Y - 5
                             if State.ESP_Name then
@@ -436,7 +528,9 @@ local function RenderESP()
                     State.ESP_Objects[player].Container.Visible = false
                 end
             else
-                if State.ESP_Objects[player] then State.ESP_Objects[player].Container.Visible = false end
+                if State.ESP_Objects[player] then
+                    State.ESP_Objects[player].Container.Visible = false
+                end
             end
         elseif State.ESP_Objects[player] then
             State.ESP_Objects[player].Container.Visible = false
@@ -448,7 +542,13 @@ end
 -- BUILD UI ELEMENTS
 -- ============================================
 TabLocal:CreateSection("Movement")
-TabLocal:CreateToggle({Name = "Fly", CurrentValue = false, Callback = function(v) if v then StartFly() else StopFly() end end})
+TabLocal:CreateToggle({Name = "Fly", CurrentValue = false, Callback = function(v)
+    if v then
+        StartFly()
+    else
+        StopFly()
+    end
+end})
 TabLocal:CreateSlider({Name = "Fly Speed", Range = {1, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) State.FlySpeed = v end})
 TabLocal:CreateToggle({Name = "Speed", CurrentValue = false, Callback = function(v) State.Speed = v end})
 TabLocal:CreateSlider({Name = "Speed Amount", Range = {16, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) State.SpeedAmt = v end})
@@ -463,11 +563,14 @@ TabLocal:CreateSection("Character & Protection")
 TabLocal:CreateToggle({Name = "Anti Ragdoll", CurrentValue = false, Callback = function(v) State.AntiRagdoll = v end})
 TabLocal:CreateToggle({Name = "Advanced Anti Fling", CurrentValue = false, Callback = function(v) State.AntiFling = v end})
 TabLocal:CreateToggle({Name = "Ghost Invisible", CurrentValue = false, Callback = function(v) State.Invisible = v end})
-TabLocal:CreateToggle({Name = "God Mode", CurrentValue = false, Callback = function(v) 
-    State.GodMode = v 
+TabLocal:CreateToggle({Name = "God Mode", CurrentValue = false, Callback = function(v)
+    State.GodMode = v
     if v and LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.MaxHealth = 999999; hum.Health = 999999 end
+        if hum then
+            hum.MaxHealth = 999999
+            hum.Health = 999999
+        end
     end
 end})
 TabLocal:CreateToggle({Name = "No Gravity", CurrentValue = false, Callback = function(v) State.NoGravity = v end})
@@ -490,10 +593,16 @@ TabCombat:CreateSlider({Name = "Hitbox Size", Range = {1, 50}, Increment = 1, Cu
 
 TabCombat:CreateSection("Fling")
 TabCombat:CreateToggle({Name = "Contact Fling", CurrentValue = false, Callback = function(v) State.ContactFling = v end})
-TabCombat:CreateToggle({Name = "Show Fling Radius", CurrentValue = false, Callback = function(v) if v then FlingVisual.Parent = workspace else FlingVisual.Parent = nil end end})
+TabCombat:CreateToggle({Name = "Show Fling Radius", CurrentValue = false, Callback = function(v)
+    if v then
+        FlingVisual.Parent = workspace
+    else
+        FlingVisual.Parent = nil
+    end
+end})
 TabCombat:CreateSlider({Name = "Fling Power", Range = {100, 50000}, Increment = 100, CurrentValue = 5000, Callback = function(v) State.FlingPower = v end})
-TabCombat:CreateSlider({Name = "Fling Radius", Range = {5, 100}, Increment = 1, CurrentValue = 30, Callback = function(v) 
-    State.FlingRadius = v 
+TabCombat:CreateSlider({Name = "Fling Radius", Range = {5, 100}, Increment = 1, CurrentValue = 30, Callback = function(v)
+    State.FlingRadius = v
     FlingVisual.Size = Vector3.new(v * 2, v * 2, v * 2)
 end})
 
@@ -508,32 +617,48 @@ TabESP:CreateToggle({Name = "Health", CurrentValue = false, Callback = function(
 TabESP:CreateToggle({Name = "Team Check", CurrentValue = true, Callback = function(v) State.ESP_TeamCheck = v end})
 
 TabESP:CreateSection("ESP Colors")
-TabESP:CreateColorPicker({Name = "Box Color", Color = Color3.fromRGB(255, 50, 50), Callback = function(color) 
-    for _, obj in pairs(State.ESP_Objects) do obj.BoxStroke.Color = color end
+TabESP:CreateColorPicker({Name = "Box Color", Color = Color3.fromRGB(255, 50, 50), Callback = function(color)
+    for _, obj in pairs(State.ESP_Objects) do
+        obj.BoxStroke.Color = color
+    end
 end})
-TabESP:CreateColorPicker({Name = "Tracer Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(color) 
-    for _, obj in pairs(State.ESP_Objects) do obj.Tracer.BackgroundColor3 = color end
+TabESP:CreateColorPicker({Name = "Tracer Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(color)
+    for _, obj in pairs(State.ESP_Objects) do
+        obj.Tracer.BackgroundColor3 = color
+    end
 end})
-TabESP:CreateColorPicker({Name = "Text Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(color) 
-    for _, obj in pairs(State.ESP_Objects) do obj.Name.TextColor3 = color end
+TabESP:CreateColorPicker({Name = "Text Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(color)
+    for _, obj in pairs(State.ESP_Objects) do
+        obj.Name.TextColor3 = color
+    end
 end})
 
 TabGoofy:CreateSection("Chaos")
 TabGoofy:CreateToggle({Name = "Disco Mode", CurrentValue = false, Callback = function(v) State.DiscoMode = v end})
 TabGoofy:CreateToggle({Name = "Headless (Local)", CurrentValue = false, Callback = function(v) State.Headless = v end})
-TabGoofy:CreateToggle({Name = "Remove Terrain", CurrentValue = false, Callback = function(v) 
+TabGoofy:CreateToggle({Name = "Remove Terrain", CurrentValue = false, Callback = function(v)
     State.RemoveTerrain = v
-    if v then pcall(function() workspace:FindFirstChildOfClass("Terrain"):Clear() end) end
+    if v then
+        pcall(function()
+            workspace:FindFirstChildOfClass("Terrain"):Clear()
+        end)
+    end
 end})
 TabGoofy:CreateButton({Name = "Fling Everyone Nearby", Callback = function()
-    if not LP.Character then return end
+    if not LP.Character then
+        return
+    end
     local myHrp = LP.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return end
+    if not myHrp then
+        return
+    end
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character then
             local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
             if tHrp and (tHrp.Position - myHrp.Position).Magnitude < 50 then
-                pcall(function() tHrp.AssemblyLinearVelocity = (tHrp.Position - myHrp.Position).Unit * 9999 + Vector3.new(0, 5000, 0) end)
+                pcall(function()
+                    tHrp.AssemblyLinearVelocity = (tHrp.Position - myHrp.Position).Unit * 9999 + Vector3.new(0, 5000, 0)
+                end)
             end
         end
     end
@@ -575,7 +700,9 @@ pcall(function()
         local isCaller = (checkcaller and checkcaller()) or false
         
         if not isCaller and State.GodMode and self and self:IsA("Humanoid") and LP.Character and self == LP.Character:FindFirstChildOfClass("Humanoid") then
-            if method == "TakeDamage" then return end
+            if method == "TakeDamage" then
+                return
+            end
         end
         
         if not isCaller and State.SilentAim and self == workspace then
@@ -613,7 +740,9 @@ table.insert(State.Connections, UserInputService.InputBegan:Connect(function(inp
             params.FilterType = Enum.RaycastFilterType.Exclude
             params.FilterDescendantsInstances = {LP.Character}
             local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-            if result then hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0)) end
+            if result then
+                hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+            end
         end
     end
     if State.AimbotMode == "Toggle (Left Mouse)" and not gpe and input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -624,7 +753,9 @@ end))
 table.insert(State.Connections, UserInputService.JumpRequest:Connect(function()
     if State.InfJump and LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
     end
 end))
 
@@ -633,25 +764,52 @@ table.insert(State.Connections, RunService.Heartbeat:Connect(function()
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
         local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
         if hum then
-            if State.Speed then pcall(function() hum.WalkSpeed = State.SpeedAmt end) else pcall(function() hum.WalkSpeed = 16 end) end
-            if State.HighJump then pcall(function() hum.JumpPower = State.JumpAmt end) else pcall(function() hum.JumpPower = 50 end) end
-            if State.GodMode then pcall(function() if hum.MaxHealth < 999999 then hum.MaxHealth = 999999 end if hum.Health < 999999 then hum.Health = 999999 end end) end
-            if State.AntiRagdoll and hum:GetState() == Enum.HumanoidStateType.Ragdoll then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+            if State.Speed then
+                pcall(function() hum.WalkSpeed = State.SpeedAmt end)
+            else
+                pcall(function() hum.WalkSpeed = 16 end)
+            end
+            if State.HighJump then
+                pcall(function() hum.JumpPower = State.JumpAmt end)
+            else
+                pcall(function() hum.JumpPower = 50 end)
+            end
+            if State.GodMode then
+                pcall(function()
+                    if hum.MaxHealth < 999999 then
+                        hum.MaxHealth = 999999
+                    end
+                    if hum.Health < 999999 then
+                        hum.Health = 999999
+                    end
+                end)
+            end
+            if State.AntiRagdoll and hum:GetState() == Enum.HumanoidStateType.Ragdoll then
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
         end
         if State.NoClip then
             for _, part in pairs(LP.Character:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
             end
         end
         if hrp then
             for _, v in pairs(hrp:GetChildren()) do
                 if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") or v:IsA("BodyForce") or v:IsA("BodyThrust") or v:IsA("RocketPropulsion") then
-                    if v.Name ~= "NoGrav_BV" and v.Name ~= "FlyBV" then v:Destroy() end
+                    if v.Name ~= "NoGrav_BV" and v.Name ~= "FlyBV" then
+                        v:Destroy()
+                    end
                 end
             end
             if State.AntiFling then
-                if hrp.AssemblyLinearVelocity.Magnitude > 1000 then hrp.AssemblyLinearVelocity = Vector3.new(0,0,0) end
-                if hrp.AssemblyAngularVelocity.Magnitude > 1000 then hrp.AssemblyAngularVelocity = Vector3.new(0,0,0) end
+                if hrp.AssemblyLinearVelocity.Magnitude > 1000 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                end
+                if hrp.AssemblyAngularVelocity.Magnitude > 1000 then
+                    hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+                end
             end
             if State.ContactFling then
                 for _, player in pairs(Players:GetPlayers()) do
@@ -660,7 +818,9 @@ table.insert(State.Connections, RunService.Heartbeat:Connect(function()
                         if tHrp and tHrp:IsA("BasePart") then
                             local dist = (tHrp.Position - hrp.Position).Magnitude
                             if dist < State.FlingRadius then
-                                pcall(function() tHrp.AssemblyLinearVelocity = (tHrp.Position - hrp.Position).Unit * State.FlingPower + Vector3.new(0, State.FlingPower * 0.5, 0) end)
+                                pcall(function()
+                                    tHrp.AssemblyLinearVelocity = (tHrp.Position - hrp.Position).Unit * State.FlingPower + Vector3.new(0, State.FlingPower * 0.5, 0)
+                                end)
                             end
                         end
                     end
@@ -679,7 +839,9 @@ table.insert(State.Connections, RunService.Heartbeat:Connect(function()
                 for _, part in pairs(LP.Character:GetDescendants()) do
                     if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                         part.LocalTransparencyModifier = 0
-                        if part.Name ~= "Head" then part.Transparency = 0 end
+                        if part.Name ~= "Head" then
+                            part.Transparency = 0
+                        end
                     elseif part:IsA("Decal") then
                         part.Transparency = 0
                     end
@@ -688,7 +850,11 @@ table.insert(State.Connections, RunService.Heartbeat:Connect(function()
             local targetScale = State.PlayerScale
             for _, v in pairs(LP.Character:GetDescendants()) do
                 if v:IsA("BodyBackScale") or v:IsA("BodyDepthScale") or v:IsA("BodyHeightScale") or v:IsA("BodyWidthScale") or v:IsA("HeadScale") then
-                    pcall(function() if v.Value ~= targetScale then v.Value = targetScale end end)
+                    pcall(function()
+                        if v.Value ~= targetScale then
+                            v.Value = targetScale
+                        end
+                    end)
                 end
             end
         end
@@ -696,22 +862,29 @@ table.insert(State.Connections, RunService.Heartbeat:Connect(function()
 end))
 
 RunService:BindToRenderStep("HubMainLoop", Enum.RenderPriority.Camera.Value + 1, function()
-    if not LP.Character then return end
+    if not LP.Character then
+        return
+    end
     local hum = LP.Character:FindFirstChildOfClass("Humanoid")
     local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
     if hum and hrp then
         local existing = hrp:FindFirstChild("NoGrav_BV")
         if State.NoGravity and not existing then
-            local bv = Instance.new("BodyVelocity", hrp)
+            local bv = Instance.new("BodyVelocity")
+            bv.Parent = hrp
             bv.Name = "NoGrav_BV"
             bv.MaxForce = Vector3.new(0, math.huge, 0)
             bv.Velocity = Vector3.new(0, 0, 0)
         elseif not State.NoGravity and existing then
             existing:Destroy()
         end
-        if State.SpinBot then hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(State.SpinSpeed), 0) end
+        if State.SpinBot then
+            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(State.SpinSpeed), 0)
+        end
         if State.Freeze then
-            if not State.FrozenPos then State.FrozenPos = hrp.Position end
+            if not State.FrozenPos then
+                State.FrozenPos = hrp.Position
+            end
             hrp.CFrame = CFrame.new(State.FrozenPos)
         else
             State.FrozenPos = nil
@@ -720,13 +893,17 @@ RunService:BindToRenderStep("HubMainLoop", Enum.RenderPriority.Camera.Value + 1,
             local head = LP.Character:FindFirstChild("Head")
             if head then
                 for _, mesh in pairs(head:GetDescendants()) do
-                    if mesh:IsA("SpecialMesh") or mesh:IsA("Decal") then mesh.Transparency = 1 end
+                    if mesh:IsA("SpecialMesh") or mesh:IsA("Decal") then
+                        mesh.Transparency = 1
+                    end
                 end
                 head.Transparency = 1
             end
         end
     end
-    if State.FOV then Cam.FieldOfView = State.FOVAmt end
+    if State.FOV then
+        Cam.FieldOfView = State.FOVAmt
+    end
     if State.Fullbright then
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
@@ -772,7 +949,9 @@ RunService:BindToRenderStep("HubMainLoop", Enum.RenderPriority.Camera.Value + 1,
             AimbotFOVCircle.Visible = false
         end
     end
-    if FlingVisual and FlingVisual.Parent and hrp then FlingVisual.Position = hrp.Position end
+    if FlingVisual and FlingVisual.Parent and hrp then
+        FlingVisual.Position = hrp.Position
+    end
     
     local aimbotActive = false
     if State.AimbotMode == "Always" then
@@ -806,7 +985,9 @@ end)
 spawn(function()
     while wait(State.SpamRate) do
         if State.ChatSpam then
-            pcall(function() game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(State.SpamMsg, "All") end)
+            pcall(function()
+                game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(State.SpamMsg, "All")
+            end)
         end
     end
 end)
@@ -829,4 +1010,9 @@ spawn(function()
     end
 end)
 
-Rayfield:Notify({Title = "Universal Hub V52", Content = "Loaded successfully! Press RightCtrl to toggle.", Duration = 3})
+local NotifyConfig = {
+    Title = "Universal Hub V53",
+    Content = "Loaded successfully! Press RightCtrl to toggle.",
+    Duration = 3
+}
+Rayfield:Notify(NotifyConfig)
