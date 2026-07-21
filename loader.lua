@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION V4
+-- UNIVERSAL HUB: ADVANCED EDITION V5
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -102,7 +102,7 @@ FOVStroke.Transparency = 0.5
 FOVStroke.Parent = FOVCircle
 
 local FOVCorner = Instance.new("UICorner")
-FOVCorner.CornerRadius = UDim.new(0.5, 0) -- Perfect Circle Fix
+FOVCorner.CornerRadius = UDim.new(0.5, 0)
 FOVCorner.Parent = FOVCircle
 
 -- ESP Functions
@@ -283,7 +283,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Silent Aim Hook (Fixed with checkcaller)
+-- Silent Aim Hook (Fixed Bullet Range & Anti-Cheat Safe)
 pcall(function()
     local OldNamecall
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -295,17 +295,25 @@ pcall(function()
             if targetChar then
                 local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
                 if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
-                if not targetPart then targetPart = targetChar:FindFirstChild("HumanoidRootPart") end
                 
                 if targetPart then
                     if method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" or method == "FindPartOnRayWithWhitelist" then
                         local origin = args[1].Origin
-                        local direction = (targetPart.Position - origin)
-                        args[1] = Ray.new(origin, direction)
+                        local oldDir = args[1].Direction
+                        local newDir = (targetPart.Position - origin)
+                        -- Preserve bullet magnitude to prevent gun breaking
+                        if oldDir.Magnitude > 0 then
+                            newDir = newDir.Unit * oldDir.Magnitude
+                        end
+                        args[1] = Ray.new(origin, newDir)
                     elseif method == "Raycast" then
                         local origin = args[1]
-                        local direction = (targetPart.Position - origin)
-                        args[2] = direction
+                        local oldDir = args[2]
+                        local newDir = (targetPart.Position - origin)
+                        if oldDir and oldDir.Magnitude > 0 then
+                            newDir = newDir.Unit * oldDir.Magnitude
+                        end
+                        args[2] = newDir
                     end
                 end
             end
@@ -314,8 +322,8 @@ pcall(function()
     end)
 end)
 
--- Main Render Loop (Priority +2 to bypass game camera scripts)
-RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 2, function()
+-- Main Render Loop
+RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
     State.CurrentTarget = getClosestPlayer()
 
     -- FOV Circle Update
@@ -352,31 +360,40 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
             if not targetPart then targetPart = targetChar:FindFirstChild("HumanoidRootPart") end
 
             if targetPart then
-                local targetCFrame = CFrame.lookAt(Cam.CFrame.Position, targetPart.Position)
-                if State.Aimbot_Smooth == 0 then
-                    Cam.CFrame = targetCFrame
-                else
-                    local alpha = 1 / State.Aimbot_Smooth
-                    Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
+                local targetPos = targetPart.Position
+                local camPos = Cam.CFrame.Position
+                -- Prevent CFrame.lookAt from crashing if distance is 0
+                if (targetPos - camPos).Magnitude > 0.1 then
+                    local targetCFrame = CFrame.lookAt(camPos, targetPos)
+                    if State.Aimbot_Smooth == 0 then
+                        Cam.CFrame = targetCFrame
+                    else
+                        local alpha = 1 / State.Aimbot_Smooth
+                        Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
+                    end
                 end
             end
         end
     end
 
-    -- Local Player Loops
+    -- Local Player Loops (Anti-Cheat Safe: Only sets if changed)
     if LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
         local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
         
         if hum and hrp then
             if State.Speed_Enabled then
-                pcall(function() hum.WalkSpeed = State.Speed_Amt end)
+                if hum.WalkSpeed ~= State.Speed_Amt then
+                    hum.WalkSpeed = State.Speed_Amt
+                end
             else
-                pcall(function() hum.WalkSpeed = 16 end)
+                if hum.WalkSpeed ~= 16 then
+                    hum.WalkSpeed = 16
+                end
             end
 
             if State.Fly_Enabled then
-                hum.PlatformStand = true
+                if not hum.PlatformStand then hum.PlatformStand = true end
                 local d = Vector3.new(0,0,0)
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Cam.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Cam.CFrame.LookVector end
@@ -392,7 +409,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                 end
                 hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Cam.CFrame.LookVector)
             else
-                hum.PlatformStand = false
+                if hum.PlatformStand then hum.PlatformStand = false end
             end
         end
     end
