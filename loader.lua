@@ -1,5 +1,5 @@
 --!nocheck
--- UNIVERSAL HUB: ADVANCED EDITION V5
+-- UNIVERSAL HUB: ADVANCED EDITION V6
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -52,7 +52,7 @@ State.ESP_Objects = {}
 State.Aimbot_Mode = "Off"
 State.Aimbot_ToggleActive = false
 State.Aimbot_FOV = 120
-State.Aimbot_Smooth = 0
+State.Aimbot_Smooth = 0 -- 0 = Instant Snap, 1 = Fast, 20 = Smooth
 State.Aimbot_WallCheck = true
 State.Aimbot_TeamCheck = true
 State.Aimbot_ShowFOV = true
@@ -61,7 +61,8 @@ State.Aimbot_RainbowFOV = false
 State.Aimbot_FOVColor = Color3.fromRGB(255, 255, 255)
 
 State.SilentAim_Enabled = false
-State.CurrentTarget = nil
+State.CurrentTarget = nil -- For Aimbot
+State.CachedSilentTarget = nil -- For Silent Aim (Stays locked even if they leave FOV)
 
 State.Fly_Enabled = false
 State.Fly_Speed = 50
@@ -215,7 +216,7 @@ local function drawLine(lineFrame, p1, p2)
     lineFrame.Visible = true
 end
 
--- Aimbot Logic
+-- Target Finding Logic
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDist = State.Aimbot_FOV
@@ -283,15 +284,16 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Silent Aim Hook (Fixed Bullet Range & Anti-Cheat Safe)
+-- Silent Aim Hook (With Target Caching)
 pcall(function()
     local OldNamecall
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
         
-        if not checkcaller() and State.SilentAim_Enabled and State.CurrentTarget and self == workspace then
-            local targetChar = State.CurrentTarget.Character
+        -- If Silent Aim is on, and we have a cached target, manipulate the bullet
+        if not checkcaller() and State.SilentAim_Enabled and State.CachedSilentTarget and self == workspace then
+            local targetChar = State.CachedSilentTarget.Character
             if targetChar then
                 local targetPart = targetChar:FindFirstChild(State.Aimbot_TargetPart)
                 if not targetPart then targetPart = targetChar:FindFirstChild("Head") end
@@ -322,9 +324,16 @@ pcall(function()
     end)
 end)
 
--- Main Render Loop
-RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value + 1, function()
+-- Main Render Loop (Using Heartbeat for camera priority)
+RunService.Heartbeat:Connect(function()
+    -- 1. Find target for standard Aimbot
     State.CurrentTarget = getClosestPlayer()
+
+    -- 2. Cache target for Silent Aim. 
+    -- If someone is in FOV, lock onto them. If no one is in FOV, keep the last person locked!
+    if State.CurrentTarget then
+        State.CachedSilentTarget = State.CurrentTarget
+    end
 
     -- FOV Circle Update
     if State.Aimbot_ShowFOV and (State.Aimbot_Mode ~= "Off" or State.SilentAim_Enabled) then
@@ -342,7 +351,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
         FOVCircle.Visible = false
     end
 
-    -- Aimbot Update
+    -- Aimbot Update (Forced on Heartbeat so game can't fight it)
     local aimbotActive = false
     if State.Aimbot_Mode == "Always" then
         aimbotActive = true
@@ -365,9 +374,11 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
                 -- Prevent CFrame.lookAt from crashing if distance is 0
                 if (targetPos - camPos).Magnitude > 0.1 then
                     local targetCFrame = CFrame.lookAt(camPos, targetPos)
+                    -- 0 = Instant, 1 = Very Fast, 20 = Smooth
                     if State.Aimbot_Smooth == 0 then
                         Cam.CFrame = targetCFrame
                     else
+                        -- Alpha = 1 / Smoothness. If Smoothness is 1, Alpha is 1 (Instant). If 20, Alpha is 0.05 (Smooth)
                         local alpha = 1 / State.Aimbot_Smooth
                         Cam.CFrame = Cam.CFrame:Lerp(targetCFrame, alpha)
                     end
@@ -376,7 +387,7 @@ RunService:BindToRenderStep("UniversalHubLoop", Enum.RenderPriority.Camera.Value
         end
     end
 
-    -- Local Player Loops (Anti-Cheat Safe: Only sets if changed)
+    -- Local Player Loops (Anti-Cheat Safe)
     if LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
         local hrp = LP.Character:FindFirstChild("HumanoidRootPart")
@@ -714,7 +725,7 @@ TabAimbot:CreateSlider({
     Callback = function(Value) State.Aimbot_FOV = Value end
 })
 TabAimbot:CreateSlider({
-    Name = "Smoothness (0 = Instant Snap, 20 = Smooth)",
+    Name = "Smoothness (0 = Instant, 1 = Fast, 20 = Smooth)",
     Range = {0, 20},
     Increment = 1,
     CurrentValue = 0,
