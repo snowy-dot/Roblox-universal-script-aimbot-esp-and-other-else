@@ -6,27 +6,32 @@ local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Load Rayfield UI
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-if not Rayfield then return end
+-- Load Linoria UI & Managers
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/SaveManager.lua"))()
 
-local Window = Rayfield:CreateWindow({
-   Name = "Universal ESP Hub",
-   LoadingTitle = "Loading ESP...",
-   LoadingSubtitle = "Rayfield Edition",
-   ConfigurationSaving = { Enabled = false },
-   KeySystem = false
+local Window = Library:CreateWindow({
+    Title = "Universal ESP",
+    Footer = "Linoria Edition",
+    NotifySide = "Right",
+    ShowCustomCursor = true
 })
 
-local TabVisuals = Window:CreateTab("Visuals", 4483362458)
+local Tabs = {
+    Visuals = Window:CreateTab("Visuals", 1),
+    Settings = Window:CreateTab("Settings", 2)
+}
 
--- ESP Settings
+-- ============================================
+-- ESP SETTINGS
+-- ============================================
 local Settings = {
     Enabled = false,
     TeamCheck = false,
-    Boxes = false,
-    Names = false,
-    Distance = false,
+    Boxes = true,
+    Names = true,
+    Distance = true,
     Tracers = false,
     BoxColor = Color3.fromRGB(255, 0, 0),
     TextColor = Color3.fromRGB(255, 255, 255),
@@ -34,32 +39,101 @@ local Settings = {
     TextSize = 13
 }
 
--- Toggles
-TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.Enabled = v end})
-TabVisuals:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.TeamCheck = v end})
-TabVisuals:CreateToggle({Name = "Boxes", CurrentValue = true, Callback = function(v) Settings.Boxes = v end})
-TabVisuals:CreateToggle({Name = "Names", CurrentValue = true, Callback = function(v) Settings.Names = v end})
-TabVisuals:CreateToggle({Name = "Distance", CurrentValue = true, Callback = function(v) Settings.Distance = v end})
-TabVisuals:CreateToggle({Name = "Tracers", CurrentValue = false, Callback = function(v) Settings.Tracers = v end})
+local VisualsGroup = Tabs.Visuals:CreateLeftGroupbox("Player ESP")
+local WorldGroup = Tabs.Visuals:CreateRightGroupbox("World Visuals")
 
--- Color Pickers & Sliders
-TabVisuals:CreateColorPicker({Name = "Box Color", Color = Color3.fromRGB(255, 0, 0), Callback = function(v) Settings.BoxColor = v end})
-TabVisuals:CreateColorPicker({Name = "Text Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(v) Settings.TextColor = v end})
-TabVisuals:CreateSlider({Name = "Text Size", Range = {8, 20}, Increment = 1, CurrentValue = 13, Callback = function(v) Settings.TextSize = v end})
+VisualsGroup:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = false,
+    Flag = "ESP_Enable",
+    Callback = function(Value) Settings.Enabled = Value end
+})
 
--- World Visuals
-TabVisuals:CreateToggle({
+VisualsGroup:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = false,
+    Flag = "ESP_TeamCheck",
+    Callback = function(Value) Settings.TeamCheck = Value end
+})
+
+VisualsGroup:CreateToggle({
+    Name = "Boxes",
+    CurrentValue = true,
+    Flag = "ESP_Boxes",
+    Callback = function(Value) Settings.Boxes = Value end
+})
+
+VisualsGroup:CreateToggle({
+    Name = "Names",
+    CurrentValue = true,
+    Flag = "ESP_Names",
+    Callback = function(Value) Settings.Names = Value end
+})
+
+VisualsGroup:CreateToggle({
+    Name = "Distance",
+    CurrentValue = true,
+    Flag = "ESP_Distance",
+    Callback = function(Value) Settings.Distance = Value end
+})
+
+VisualsGroup:CreateToggle({
+    Name = "Tracers",
+    CurrentValue = false,
+    Flag = "ESP_Tracers",
+    Callback = function(Value) Settings.Tracers = Value end
+})
+
+VisualsGroup:CreateColorPicker({
+    Name = "Box Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Callback = function(Value) Settings.BoxColor = Value end
+})
+
+VisualsGroup:CreateColorPicker({
+    Name = "Text Color",
+    Color = Color3.fromRGB(255, 255, 255),
+    Callback = function(Value) Settings.TextColor = Value end
+})
+
+VisualsGroup:CreateSlider({
+    Name = "Text Size",
+    Range = {8, 20},
+    Increment = 1,
+    Suffix = "px",
+    CurrentValue = 13,
+    Callback = function(Value) Settings.TextSize = Value end
+})
+
+WorldGroup:CreateToggle({
     Name = "Fullbright",
     CurrentValue = false,
-    Callback = function(v)
-        if v then
-            Lighting.Brightness = 2; Lighting.ClockTime = 14; Lighting.FogEnd = 100000; Lighting.GlobalShadows = false
+    Flag = "World_Fullbright",
+    Callback = function(Value)
+        if Value then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
         else
-            Lighting.Brightness = 1; Lighting.ClockTime = 12; Lighting.FogEnd = 100000; Lighting.GlobalShadows = true
+            Lighting.Brightness = 1
+            Lighting.ClockTime = 12
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = true
         end
     end
 })
-TabVisuals:CreateSlider({Name = "Camera FOV", Range = {40, 120}, Increment = 1, CurrentValue = 70, Callback = function(v) Camera.FieldOfView = v end})
+
+WorldGroup:CreateSlider({
+    Name = "Camera FOV",
+    Range = {40, 120},
+    Increment = 1,
+    Suffix = "FOV",
+    CurrentValue = 70,
+    Callback = function(Value)
+        Camera.FieldOfView = Value
+    end
+})
 
 -- ============================================
 -- ESP LOGIC (Drawing API)
@@ -174,11 +248,13 @@ RunService.RenderStepped:Connect(function()
                         obj.Tracer.Visible = false
                     end
                 else
-                    obj.Box.Visible = false
-                    obj.BoxOutline.Visible = false
-                    obj.Name.Visible = false
-                    obj.Distance.Visible = false
-                    obj.Tracer.Visible = false
+                    if obj then
+                        obj.Box.Visible = false
+                        obj.BoxOutline.Visible = false
+                        obj.Name.Visible = false
+                        obj.Distance.Visible = false
+                        obj.Tracer.Visible = false
+                    end
                 end
             else
                 if obj then
@@ -201,4 +277,19 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-Rayfield:Notify("Universal ESP", "Script loaded successfully!", 5)
+-- ============================================
+-- SETTINGS TAB SETUP (Matches your image)
+-- ============================================
+local SettingsGroup = Tabs.Settings:CreateLeftGroupbox("Config")
+local ThemeGroup = Tabs.Settings:CreateRightGroupbox("Custom Theme")
+
+-- Config Manager
+SaveManager:SetLibrary(Library)
+SaveManager:BuildConfigSection(SettingsGroup)
+
+-- Theme Manager
+ThemeManager:SetLibrary(Library)
+ThemeManager:BuildThemeSection(ThemeGroup)
+
+-- Load saved settings
+SaveManager:LoadAutoloadConfig()
