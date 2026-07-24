@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
 -- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -86,13 +87,15 @@ local function GetClosestPlayer()
     return closestPlayer
 end
 
-RunService.RenderStepped:Connect(function()
+-- Bind to RenderStep with High Priority to override game camera scripts
+RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 1, function()
     if Settings.Aimbot.Enabled then
         FOVCircle.Visible = true
         FOVCircle.Radius = Settings.Aimbot.FOV
         local mousePos = UserInputService:GetMouseLocation()
         FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
         
+        -- Check if Right Mouse Button is held
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             local target = GetClosestPlayer()
             if target then
@@ -192,7 +195,6 @@ RunService.RenderStepped:Connect(function()
                         
                         if Settings.ESP.Names then
                             obj.Name.Visible = true
-                            -- FIXED: Wrapped in tostring() to prevent "expects a string, but table was passed" error
                             obj.Name.Text = tostring(player.DisplayName)
                             obj.Name.Position = Vector2.new(headPos.X, headPos.Y - 16)
                             obj.Name.Color = Settings.ESP.TextColor
@@ -204,7 +206,6 @@ RunService.RenderStepped:Connect(function()
                         if Settings.ESP.Distance then
                             obj.Distance.Visible = true
                             local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
-                            -- FIXED: Wrapped in tostring() to prevent "expects a string, but table was passed" error
                             obj.Distance.Text = tostring(dist) .. " studs"
                             obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
                             obj.Distance.Color = Settings.ESP.TextColor
@@ -285,6 +286,7 @@ TabVisuals:CreateSlider({Name = "Text Size", Range = {8, 20}, Increment = 1, Cur
 TabSettings:CreateButton({Name = "Unload Script", Callback = function()
     for player, _ in pairs(EspObjects) do ClearEsp(player) end
     FOVCircle:Remove()
+    RunService:UnbindFromRenderStep("AimbotUpdate")
     Rayfield:Destroy()
 end})
 
