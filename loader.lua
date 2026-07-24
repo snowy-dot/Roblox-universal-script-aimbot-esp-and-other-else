@@ -12,9 +12,9 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 if not Rayfield then return end
 
 local Window = Rayfield:CreateWindow({
-   Name = "Universal Anti-Cheat Aimbot",
+   Name = "Universal Aimbot & ESP",
    LoadingTitle = "Loading Hub...",
-   LoadingSubtitle = "Bypass Edition",
+   LoadingSubtitle = "Dynamic ESP Edition",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
@@ -38,7 +38,7 @@ local Settings = {
         FOVColor = Color3.fromRGB(255, 255, 255),
         FOVThickness = 1.5,
         FOVFilled = false,
-        MouseAim = true -- Uses mousemoverel for ultimate stealth
+        MouseAim = true
     },
     ESP = {
         Enabled = false,
@@ -50,7 +50,8 @@ local Settings = {
         BoxColor = Color3.fromRGB(255, 0, 0),
         TextColor = Color3.fromRGB(255, 255, 255),
         TracerColor = Color3.fromRGB(255, 0, 0),
-        TextSize = 13
+        TextSize = 13,
+        Dynamic = true -- Automatically adjusts ESP for creatures/monsters
     }
 }
 
@@ -93,6 +94,11 @@ local function GetClosestPlayer()
 
             if not isTeammate then
                 local targetPart = player.Character:FindFirstChild(Settings.Aimbot.AimPart)
+                -- Fallback to HumanoidRootPart if the specific part doesn't exist (e.g., creature transformations)
+                if not targetPart then
+                    targetPart = player.Character:FindFirstChild("HumanoidRootPart")
+                end
+
                 if targetPart then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                     if onScreen then
@@ -124,7 +130,6 @@ local function GetClosestPlayer()
 end
 
 RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2, function()
-    -- Wrap in pcall to prevent game anti-cheat from crashing the loop
     pcall(function()
         if Settings.Aimbot.Enabled then
             FOVCircle.Visible = true
@@ -139,6 +144,8 @@ RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2
                 local target = GetClosestPlayer()
                 if target then
                     local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
+                    if not targetPart then targetPart = target.Character:FindFirstChild("HumanoidRootPart") end
+                    
                     if targetPart then
                         local targetPos = targetPart.Position
                         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
@@ -147,14 +154,11 @@ RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2
                             local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                             local delta = Vector2.new(screenPos.X - centerScreen.X, screenPos.Y - centerScreen.Y)
                             
-                            -- STEALTH MODE: Use mousemoverel to bypass game camera locks
                             if Settings.Aimbot.MouseAim and mousemoverel then
-                                -- Calculate movement based on smoothness (0.1 = slow, 1.0 = instant)
                                 local moveX = delta.X * Settings.Aimbot.Smoothness
                                 local moveY = delta.Y * Settings.Aimbot.Smoothness
                                 mousemoverel(moveX, moveY)
                             else
-                                -- Fallback: Direct Camera CFrame lock (less stealthy but works if mousemoverel is blocked)
                                 local aimCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
                                 if Settings.Aimbot.Smoothness > 0 and Settings.Aimbot.Smoothness < 1 then
                                     Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Settings.Aimbot.Smoothness)
@@ -173,7 +177,7 @@ RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2
 end)
 
 -- ============================================
--- ESP LOGIC
+-- ESP LOGIC (Dynamic Adjustment)
 -- ============================================
 local EspObjects = {}
 
@@ -225,17 +229,32 @@ RunService.RenderStepped:Connect(function()
                     local hrp = char:FindFirstChild("HumanoidRootPart")
                     local head = char:FindFirstChild("Head")
                     local hum = char:FindFirstChild("Humanoid")
-                    if hrp and head and hum and hum.Health > 0 then
+                    if hrp and hum and hum.Health > 0 then
                         local isTeammate = false
                         if Settings.ESP.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
                         
                         local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
                         if onScreen and not isTeammate then
-                            local headPos = Camera:WorldToViewportPoint(head.Position)
-                            local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-                            local height = math.abs(headPos.Y - legPos.Y)
-                            local width = height / 2
+                            local headPos = Camera:WorldToViewportPoint(head and head.Position or hrp.Position)
                             
+                            -- DYNAMIC ADJUSTMENT LOGIC FOR CREATURES/MONSTERS
+                            local height = 5
+                            local width = 3
+                            if Settings.ESP.Dynamic then
+                                -- Calculate size based on the character's bounding box
+                                local size = char:GetExtentsSize()
+                                height = math.clamp(size.Y * 3, 20, 500) -- Scale for screen
+                                width = math.clamp(size.X * 2, 10, 300)
+                            else
+                                -- Standard size based on Head to Leg distance
+                                local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                                height = math.abs(headPos.Y - legPos.Y)
+                                width = height / 2
+                            end
+
+                            if height < 15 then height = 15 end
+                            if width < 5 then width = 5 end
+
                             if Settings.ESP.Boxes then
                                 obj.Box.Visible = true
                                 obj.BoxOutline.Visible = true
@@ -263,7 +282,7 @@ RunService.RenderStepped:Connect(function()
                                 obj.Distance.Visible = true
                                 local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
                                 obj.Distance.Text = tostring(dist) .. " studs"
-                                obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
+                                obj.Distance.Position = Vector2.new(headPos.X, headPos.Y + (height / 2) + 5)
                                 obj.Distance.Color = Settings.ESP.TextColor
                                 obj.Distance.Size = Settings.ESP.TextSize
                             else
@@ -336,6 +355,7 @@ TabAimbot:CreateToggle({Name = "Fill FOV Circle", CurrentValue = false, Callback
 -- Visuals Tab
 TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.ESP.Enabled = v end})
 TabVisuals:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.ESP.TeamCheck = v end})
+TabVisuals:CreateToggle({Name = "Dynamic ESP (For Creatures/Monsters)", CurrentValue = true, Callback = function(v) Settings.ESP.Dynamic = v end})
 TabVisuals:CreateToggle({Name = "Boxes", CurrentValue = true, Callback = function(v) Settings.ESP.Boxes = v end})
 TabVisuals:CreateToggle({Name = "Names", CurrentValue = true, Callback = function(v) Settings.ESP.Names = v end})
 TabVisuals:CreateToggle({Name = "Distance", CurrentValue = true, Callback = function(v) Settings.ESP.Distance = v end})
