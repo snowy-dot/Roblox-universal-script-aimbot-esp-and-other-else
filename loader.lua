@@ -6,7 +6,6 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 
 -- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -59,20 +58,6 @@ FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
--- Right-Click Tracker
-local RightClickHeld = false
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        RightClickHeld = true
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        RightClickHeld = false
-    end
-end)
-
 local function GetClosestPlayer()
     local closestPlayer = nil
     local shortestDistance = math.huge
@@ -80,7 +65,13 @@ local function GetClosestPlayer()
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            if not Settings.Aimbot.TeamCheck or (player.Team ~= LocalPlayer.Team or LocalPlayer.Team == nil) then
+            -- Team Check Logic
+            local isTeammate = false
+            if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                isTeammate = true
+            end
+
+            if not isTeammate then
                 local targetPart = player.Character:FindFirstChild(Settings.Aimbot.AimPart)
                 if targetPart then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
@@ -99,27 +90,28 @@ local function GetClosestPlayer()
 end
 
 RunService.RenderStepped:Connect(function()
-    -- Update FOV Circle
     if Settings.Aimbot.Enabled then
         FOVCircle.Visible = true
         FOVCircle.Radius = Settings.Aimbot.FOV
         local mousePos = UserInputService:GetMouseLocation()
         FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
         
-        -- Aimbot Logic: Only activates when Right-Click is held
-        if RightClickHeld then
+        -- Check if Right Mouse Button (MouseButton2) is currently held down
+        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             local target = GetClosestPlayer()
             if target then
                 local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
                 if targetPart then
                     local targetPos = targetPart.Position
-                    local aimPos = Camera.CFrame.Position + (targetPos - Camera.CFrame.Position).Unit * 1000
-                    local newCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
                     
-                    if Settings.Aimbot.Smoothness > 0 then
-                        Camera.CFrame = Camera.CFrame:Lerp(newCFrame, Settings.Aimbot.Smoothness)
+                    -- Create a CFrame looking directly at the target
+                    local aimCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+                    
+                    -- Apply smoothing using Lerp
+                    if Settings.Aimbot.Smoothness > 0 and Settings.Aimbot.Smoothness < 1 then
+                        Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Settings.Aimbot.Smoothness)
                     else
-                        Camera.CFrame = newCFrame
+                        Camera.CFrame = aimCFrame
                     end
                 end
             end
