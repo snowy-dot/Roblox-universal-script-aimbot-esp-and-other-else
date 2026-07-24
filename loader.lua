@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -32,8 +33,7 @@ local Settings = {
         TeamCheck = false,
         AimPart = "Head",
         Smoothness = 0.2,
-        FOV = 100,
-        VisibleCheck = false
+        FOV = 100
     },
     ESP = {
         Enabled = false,
@@ -59,6 +59,20 @@ FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
+-- Right-Click Tracker
+local RightClickHeld = false
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        RightClickHeld = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        RightClickHeld = false
+    end
+end)
+
 local function GetClosestPlayer()
     local closestPlayer = nil
     local shortestDistance = math.huge
@@ -73,20 +87,8 @@ local function GetClosestPlayer()
                     if onScreen then
                         local distance = (Vector2.new(screenPos.X, screenPos.Y) - centerScreen).Magnitude
                         if distance < Settings.Aimbot.FOV and distance < shortestDistance then
-                            -- Visibility Check (Optional)
-                            local isVisible = true
-                            if Settings.Aimbot.VisibleCheck then
-                                local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
-                                local hit = Workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character, Camera})
-                                if hit and not hit:IsDescendantOf(player.Character) then
-                                    isVisible = false
-                                end
-                            end
-
-                            if isVisible then
-                                shortestDistance = distance
-                                closestPlayer = player
-                            end
+                            shortestDistance = distance
+                            closestPlayer = player
                         end
                     end
                 end
@@ -101,28 +103,29 @@ RunService.RenderStepped:Connect(function()
     if Settings.Aimbot.Enabled then
         FOVCircle.Visible = true
         FOVCircle.Radius = Settings.Aimbot.FOV
-        FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
-    else
-        FOVCircle.Visible = false
-    end
-
-    -- Aimbot Logic
-    if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = GetClosestPlayer()
-        if target then
-            local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
-            if targetPart then
-                local targetPos = targetPart.Position
-                local aimPos = Camera.CFrame.Position + (targetPos - Camera.CFrame.Position).Unit * 1000
-                local newCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
-                
-                if Settings.Aimbot.Smoothness > 0 then
-                    Camera.CFrame = Camera.CFrame:Lerp(newCFrame, Settings.Aimbot.Smoothness)
-                else
-                    Camera.CFrame = newCFrame
+        local mousePos = UserInputService:GetMouseLocation()
+        FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        
+        -- Aimbot Logic: Only activates when Right-Click is held
+        if RightClickHeld then
+            local target = GetClosestPlayer()
+            if target then
+                local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
+                if targetPart then
+                    local targetPos = targetPart.Position
+                    local aimPos = Camera.CFrame.Position + (targetPos - Camera.CFrame.Position).Unit * 1000
+                    local newCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+                    
+                    if Settings.Aimbot.Smoothness > 0 then
+                        Camera.CFrame = Camera.CFrame:Lerp(newCFrame, Settings.Aimbot.Smoothness)
+                    else
+                        Camera.CFrame = newCFrame
+                    end
                 end
             end
         end
+    else
+        FOVCircle.Visible = false
     end
 end)
 
@@ -275,10 +278,10 @@ end)
 -- Aimbot Tab
 TabAimbot:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) Settings.Aimbot.Enabled = v end})
 TabAimbot:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.TeamCheck = v end})
-TabAimbot:CreateToggle({Name = "Visible Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.VisibleCheck = v end})
 TabAimbot:CreateDropdown({Name = "Aim Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentValue = "Head", Callback = function(v) Settings.Aimbot.AimPart = v end})
 TabAimbot:CreateSlider({Name = "FOV", Range = {10, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) Settings.Aimbot.FOV = v end})
 TabAimbot:CreateSlider({Name = "Smoothness", Range = {0, 1}, Increment = 0.05, CurrentValue = 0.2, Callback = function(v) Settings.Aimbot.Smoothness = v end})
+TabAimbot:CreateLabel("Hold Right-Click to aimbot the closest player.")
 
 -- Visuals Tab
 TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.ESP.Enabled = v end})
