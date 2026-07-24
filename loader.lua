@@ -65,11 +65,8 @@ local function GetClosestPlayer()
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            -- Team Check Logic
             local isTeammate = false
-            if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                isTeammate = true
-            end
+            if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
 
             if not isTeammate then
                 local targetPart = player.Character:FindFirstChild(Settings.Aimbot.AimPart)
@@ -96,18 +93,14 @@ RunService.RenderStepped:Connect(function()
         local mousePos = UserInputService:GetMouseLocation()
         FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
         
-        -- Check if Right Mouse Button (MouseButton2) is currently held down
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             local target = GetClosestPlayer()
             if target then
                 local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
                 if targetPart then
                     local targetPos = targetPart.Position
-                    
-                    -- Create a CFrame looking directly at the target
                     local aimCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
                     
-                    -- Apply smoothing using Lerp
                     if Settings.Aimbot.Smoothness > 0 and Settings.Aimbot.Smoothness < 1 then
                         Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Settings.Aimbot.Smoothness)
                     else
@@ -199,7 +192,8 @@ RunService.RenderStepped:Connect(function()
                         
                         if Settings.ESP.Names then
                             obj.Name.Visible = true
-                            obj.Name.Text = player.DisplayName
+                            -- FIXED: Wrapped in tostring() to prevent "expects a string, but table was passed" error
+                            obj.Name.Text = tostring(player.DisplayName)
                             obj.Name.Position = Vector2.new(headPos.X, headPos.Y - 16)
                             obj.Name.Color = Settings.ESP.TextColor
                             obj.Name.Size = Settings.ESP.TextSize
@@ -210,6 +204,7 @@ RunService.RenderStepped:Connect(function()
                         if Settings.ESP.Distance then
                             obj.Distance.Visible = true
                             local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+                            -- FIXED: Wrapped in tostring() to prevent "expects a string, but table was passed" error
                             obj.Distance.Text = tostring(dist) .. " studs"
                             obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
                             obj.Distance.Color = Settings.ESP.TextColor
