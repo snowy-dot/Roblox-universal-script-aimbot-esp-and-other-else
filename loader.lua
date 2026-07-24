@@ -32,8 +32,7 @@ local Settings = {
         TeamCheck = false,
         AimPart = "Head",
         Smoothness = 0.2,
-        FOV = 100,
-        CameraLock = false -- This is the bypass that stops the game from fighting the aimbot
+        FOV = 100
     },
     ESP = {
         Enabled = false,
@@ -87,26 +86,14 @@ local function GetClosestPlayer()
     return closestPlayer
 end
 
--- Bind to RenderStep with High Priority to override game camera scripts
-RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 1, function()
-    -- Camera Lock Bypass: Forces the game to release camera control
-    if Settings.Aimbot.CameraLock then
-        if Camera.CameraType ~= Enum.CameraType.Scriptable then
-            Camera.CameraType = Enum.CameraType.Scriptable
-        end
-    else
-        if Camera.CameraType ~= Enum.CameraType.Custom then
-            Camera.CameraType = Enum.CameraType.Custom
-        end
-    end
-
+-- Run at the HIGHEST priority so the game script can't overwrite the aimbot
+RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2, function()
     if Settings.Aimbot.Enabled then
         FOVCircle.Visible = true
         FOVCircle.Radius = Settings.Aimbot.FOV
         local mousePos = UserInputService:GetMouseLocation()
         FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
         
-        -- Check if Right Mouse Button is held
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             local target = GetClosestPlayer()
             if target then
@@ -276,12 +263,11 @@ end)
 
 -- Aimbot Tab
 TabAimbot:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) Settings.Aimbot.Enabled = v end})
-TabAimbot:CreateToggle({Name = "Camera Lock Bypass", CurrentValue = false, Callback = function(v) Settings.Aimbot.CameraLock = v end})
 TabAimbot:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.TeamCheck = v end})
 TabAimbot:CreateDropdown({Name = "Aim Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentValue = "Head", Callback = function(v) Settings.Aimbot.AimPart = v end})
 TabAimbot:CreateSlider({Name = "FOV", Range = {10, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) Settings.Aimbot.FOV = v end})
 TabAimbot:CreateSlider({Name = "Smoothness", Range = {0, 1}, Increment = 0.05, CurrentValue = 0.2, Callback = function(v) Settings.Aimbot.Smoothness = v end})
-TabAimbot:CreateLabel("Enable 'Camera Lock Bypass' if the aimbot isn't locking.")
+TabAimbot:CreateLabel("Hold Right-Click to lock onto the closest player.")
 
 -- Visuals Tab
 TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.ESP.Enabled = v end})
@@ -299,9 +285,6 @@ TabSettings:CreateButton({Name = "Unload Script", Callback = function()
     for player, _ in pairs(EspObjects) do ClearEsp(player) end
     FOVCircle:Remove()
     RunService:UnbindFromRenderStep("AimbotUpdate")
-    if Settings.Aimbot.CameraLock then
-        Camera.CameraType = Enum.CameraType.Custom
-    end
     Rayfield:Destroy()
 end})
 
