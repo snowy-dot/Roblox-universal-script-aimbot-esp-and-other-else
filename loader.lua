@@ -12,9 +12,9 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 if not Rayfield then return end
 
 local Window = Rayfield:CreateWindow({
-   Name = "Universal Aimbot & ESP",
+   Name = "Universal Anti-Cheat Aimbot",
    LoadingTitle = "Loading Hub...",
-   LoadingSubtitle = "Advanced Edition",
+   LoadingSubtitle = "Bypass Edition",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
@@ -30,9 +30,15 @@ local Settings = {
     Aimbot = {
         Enabled = false,
         TeamCheck = false,
+        WallCheck = false,
         AimPart = "Head",
         Smoothness = 0.2,
-        FOV = 100
+        FOV = 100,
+        Keybind = "MouseButton2",
+        FOVColor = Color3.fromRGB(255, 255, 255),
+        FOVThickness = 1.5,
+        FOVFilled = false,
+        MouseAim = true -- Uses mousemoverel for ultimate stealth
     },
     ESP = {
         Enabled = false,
@@ -58,6 +64,23 @@ FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
+local KeyMap = {
+    ["Right Mouse Button"] = Enum.UserInputType.MouseButton2,
+    ["Left Mouse Button"] = Enum.UserInputType.MouseButton1,
+    ["Left Shift"] = Enum.KeyCode.LeftShift,
+    ["Left Alt"] = Enum.KeyCode.LeftAlt
+}
+
+local function IsKeyActivated()
+    local key = KeyMap[Settings.Aimbot.Keybind]
+    if not key then return false end
+    if key.EnumType == Enum.UserInputType then
+        return UserInputService:IsMouseButtonPressed(key)
+    else
+        return UserInputService:IsKeyDown(key)
+    end
+end
+
 local function GetClosestPlayer()
     local closestPlayer = nil
     local shortestDistance = math.huge
@@ -75,8 +98,22 @@ local function GetClosestPlayer()
                     if onScreen then
                         local distance = (Vector2.new(screenPos.X, screenPos.Y) - centerScreen).Magnitude
                         if distance < Settings.Aimbot.FOV and distance < shortestDistance then
-                            shortestDistance = distance
-                            closestPlayer = player
+                            -- Wall Check Logic
+                            local isVisible = true
+                            if Settings.Aimbot.WallCheck then
+                                local rayParams = RaycastParams.new()
+                                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                                rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+                                local result = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), rayParams)
+                                if result and not result.Instance:IsDescendantOf(player.Character) then
+                                    isVisible = false
+                                end
+                            end
+
+                            if isVisible then
+                                shortestDistance = distance
+                                closestPlayer = player
+                            end
                         end
                     end
                 end
@@ -86,33 +123,53 @@ local function GetClosestPlayer()
     return closestPlayer
 end
 
--- Run at the HIGHEST priority so the game script can't overwrite the aimbot
 RunService:BindToRenderStep("AimbotUpdate", Enum.RenderPriority.Camera.Value + 2, function()
-    if Settings.Aimbot.Enabled then
-        FOVCircle.Visible = true
-        FOVCircle.Radius = Settings.Aimbot.FOV
-        local mousePos = UserInputService:GetMouseLocation()
-        FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
-        
-        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            local target = GetClosestPlayer()
-            if target then
-                local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
-                if targetPart then
-                    local targetPos = targetPart.Position
-                    local aimCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-                    
-                    if Settings.Aimbot.Smoothness > 0 and Settings.Aimbot.Smoothness < 1 then
-                        Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Settings.Aimbot.Smoothness)
-                    else
-                        Camera.CFrame = aimCFrame
+    -- Wrap in pcall to prevent game anti-cheat from crashing the loop
+    pcall(function()
+        if Settings.Aimbot.Enabled then
+            FOVCircle.Visible = true
+            FOVCircle.Radius = Settings.Aimbot.FOV
+            FOVCircle.Color = Settings.Aimbot.FOVColor
+            FOVCircle.Thickness = Settings.Aimbot.FOVThickness
+            FOVCircle.Filled = Settings.Aimbot.FOVFilled
+            local mousePos = UserInputService:GetMouseLocation()
+            FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+            
+            if IsKeyActivated() then
+                local target = GetClosestPlayer()
+                if target then
+                    local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
+                    if targetPart then
+                        local targetPos = targetPart.Position
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+                        
+                        if onScreen then
+                            local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                            local delta = Vector2.new(screenPos.X - centerScreen.X, screenPos.Y - centerScreen.Y)
+                            
+                            -- STEALTH MODE: Use mousemoverel to bypass game camera locks
+                            if Settings.Aimbot.MouseAim and mousemoverel then
+                                -- Calculate movement based on smoothness (0.1 = slow, 1.0 = instant)
+                                local moveX = delta.X * Settings.Aimbot.Smoothness
+                                local moveY = delta.Y * Settings.Aimbot.Smoothness
+                                mousemoverel(moveX, moveY)
+                            else
+                                -- Fallback: Direct Camera CFrame lock (less stealthy but works if mousemoverel is blocked)
+                                local aimCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+                                if Settings.Aimbot.Smoothness > 0 and Settings.Aimbot.Smoothness < 1 then
+                                    Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Settings.Aimbot.Smoothness)
+                                else
+                                    Camera.CFrame = aimCFrame
+                                end
+                            end
+                        end
                     end
                 end
             end
+        else
+            FOVCircle.Visible = false
         end
-    else
-        FOVCircle.Visible = false
-    end
+    end)
 end)
 
 -- ============================================
@@ -123,7 +180,7 @@ local EspObjects = {}
 local function ClearEsp(player)
     if EspObjects[player] then
         for _, drawing in pairs(EspObjects[player]) do
-            drawing:Remove()
+            pcall(function() drawing:Remove() end)
         end
         EspObjects[player] = nil
     end
@@ -160,72 +217,82 @@ Players.PlayerRemoving:Connect(function(p) ClearEsp(p) end)
 for _, p in ipairs(Players:GetPlayers()) do CreateEsp(p) end
 
 RunService.RenderStepped:Connect(function()
-    if Settings.ESP.Enabled then
-        for player, obj in pairs(EspObjects) do
-            local char = player.Character
-            if char and player ~= LocalPlayer then
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                local head = char:FindFirstChild("Head")
-                local hum = char:FindFirstChild("Humanoid")
-                if hrp and head and hum and hum.Health > 0 then
-                    local isTeammate = false
-                    if Settings.ESP.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
-                    
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    if onScreen and not isTeammate then
-                        local headPos = Camera:WorldToViewportPoint(head.Position)
-                        local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-                        local height = math.abs(headPos.Y - legPos.Y)
-                        local width = height / 2
+    pcall(function()
+        if Settings.ESP.Enabled then
+            for player, obj in pairs(EspObjects) do
+                local char = player.Character
+                if char and player ~= LocalPlayer then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    local head = char:FindFirstChild("Head")
+                    local hum = char:FindFirstChild("Humanoid")
+                    if hrp and head and hum and hum.Health > 0 then
+                        local isTeammate = false
+                        if Settings.ESP.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
                         
-                        if Settings.ESP.Boxes then
-                            obj.Box.Visible = true
-                            obj.BoxOutline.Visible = true
-                            obj.Box.Size = Vector2.new(width, height)
-                            obj.Box.Position = Vector2.new(headPos.X - width / 2, headPos.Y)
-                            obj.Box.Color = Settings.ESP.BoxColor
-                            obj.BoxOutline.Size = obj.Box.Size
-                            obj.BoxOutline.Position = obj.Box.Position
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                        if onScreen and not isTeammate then
+                            local headPos = Camera:WorldToViewportPoint(head.Position)
+                            local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                            local height = math.abs(headPos.Y - legPos.Y)
+                            local width = height / 2
+                            
+                            if Settings.ESP.Boxes then
+                                obj.Box.Visible = true
+                                obj.BoxOutline.Visible = true
+                                obj.Box.Size = Vector2.new(width, height)
+                                obj.Box.Position = Vector2.new(headPos.X - width / 2, headPos.Y)
+                                obj.Box.Color = Settings.ESP.BoxColor
+                                obj.BoxOutline.Size = obj.Box.Size
+                                obj.BoxOutline.Position = obj.Box.Position
+                            else
+                                obj.Box.Visible = false
+                                obj.BoxOutline.Visible = false
+                            end
+                            
+                            if Settings.ESP.Names then
+                                obj.Name.Visible = true
+                                obj.Name.Text = tostring(player.DisplayName)
+                                obj.Name.Position = Vector2.new(headPos.X, headPos.Y - 16)
+                                obj.Name.Color = Settings.ESP.TextColor
+                                obj.Name.Size = Settings.ESP.TextSize
+                            else
+                                obj.Name.Visible = false
+                            end
+                            
+                            if Settings.ESP.Distance then
+                                obj.Distance.Visible = true
+                                local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+                                obj.Distance.Text = tostring(dist) .. " studs"
+                                obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
+                                obj.Distance.Color = Settings.ESP.TextColor
+                                obj.Distance.Size = Settings.ESP.TextSize
+                            else
+                                obj.Distance.Visible = false
+                            end
+                            
+                            if Settings.ESP.Tracers then
+                                obj.Tracer.Visible = true
+                                obj.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                                obj.Tracer.To = Vector2.new(headPos.X, headPos.Y)
+                                obj.Tracer.Color = Settings.ESP.TracerColor
+                            else
+                                obj.Tracer.Visible = false
+                            end
                         else
                             obj.Box.Visible = false
                             obj.BoxOutline.Visible = false
-                        end
-                        
-                        if Settings.ESP.Names then
-                            obj.Name.Visible = true
-                            obj.Name.Text = tostring(player.DisplayName)
-                            obj.Name.Position = Vector2.new(headPos.X, headPos.Y - 16)
-                            obj.Name.Color = Settings.ESP.TextColor
-                            obj.Name.Size = Settings.ESP.TextSize
-                        else
                             obj.Name.Visible = false
-                        end
-                        
-                        if Settings.ESP.Distance then
-                            obj.Distance.Visible = true
-                            local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
-                            obj.Distance.Text = tostring(dist) .. " studs"
-                            obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
-                            obj.Distance.Color = Settings.ESP.TextColor
-                            obj.Distance.Size = Settings.ESP.TextSize
-                        else
                             obj.Distance.Visible = false
-                        end
-                        
-                        if Settings.ESP.Tracers then
-                            obj.Tracer.Visible = true
-                            obj.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                            obj.Tracer.To = Vector2.new(headPos.X, headPos.Y)
-                            obj.Tracer.Color = Settings.ESP.TracerColor
-                        else
                             obj.Tracer.Visible = false
                         end
                     else
-                        obj.Box.Visible = false
-                        obj.BoxOutline.Visible = false
-                        obj.Name.Visible = false
-                        obj.Distance.Visible = false
-                        obj.Tracer.Visible = false
+                        if obj then
+                            obj.Box.Visible = false
+                            obj.BoxOutline.Visible = false
+                            obj.Name.Visible = false
+                            obj.Distance.Visible = false
+                            obj.Tracer.Visible = false
+                        end
                     end
                 else
                     if obj then
@@ -236,25 +303,17 @@ RunService.RenderStepped:Connect(function()
                         obj.Tracer.Visible = false
                     end
                 end
-            else
-                if obj then
-                    obj.Box.Visible = false
-                    obj.BoxOutline.Visible = false
-                    obj.Name.Visible = false
-                    obj.Distance.Visible = false
-                    obj.Tracer.Visible = false
-                end
+            end
+        else
+            for _, obj in pairs(EspObjects) do
+                obj.Box.Visible = false
+                obj.BoxOutline.Visible = false
+                obj.Name.Visible = false
+                obj.Distance.Visible = false
+                obj.Tracer.Visible = false
             end
         end
-    else
-        for _, obj in pairs(EspObjects) do
-            obj.Box.Visible = false
-            obj.BoxOutline.Visible = false
-            obj.Name.Visible = false
-            obj.Distance.Visible = false
-            obj.Tracer.Visible = false
-        end
-    end
+    end)
 end)
 
 -- ============================================
@@ -263,11 +322,16 @@ end)
 
 -- Aimbot Tab
 TabAimbot:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) Settings.Aimbot.Enabled = v end})
+TabAimbot:CreateToggle({Name = "Stealth Mode (Mouse Aim)", CurrentValue = true, Callback = function(v) Settings.Aimbot.MouseAim = v end})
+TabAimbot:CreateDropdown({Name = "Activation Key", Options = {"Right Mouse Button", "Left Mouse Button", "Left Shift", "Left Alt"}, CurrentValue = "Right Mouse Button", Callback = function(v) Settings.Aimbot.Keybind = v end})
 TabAimbot:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.TeamCheck = v end})
+TabAimbot:CreateToggle({Name = "Wall Check (Visible Only)", CurrentValue = false, Callback = function(v) Settings.Aimbot.WallCheck = v end})
 TabAimbot:CreateDropdown({Name = "Aim Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentValue = "Head", Callback = function(v) Settings.Aimbot.AimPart = v end})
 TabAimbot:CreateSlider({Name = "FOV", Range = {10, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) Settings.Aimbot.FOV = v end})
 TabAimbot:CreateSlider({Name = "Smoothness", Range = {0, 1}, Increment = 0.05, CurrentValue = 0.2, Callback = function(v) Settings.Aimbot.Smoothness = v end})
-TabAimbot:CreateLabel("Hold Right-Click to lock onto the closest player.")
+TabAimbot:CreateColorPicker({Name = "FOV Circle Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(v) Settings.Aimbot.FOVColor = v end})
+TabAimbot:CreateSlider({Name = "FOV Circle Thickness", Range = {1, 5}, Increment = 0.5, CurrentValue = 1.5, Callback = function(v) Settings.Aimbot.FOVThickness = v end})
+TabAimbot:CreateToggle({Name = "Fill FOV Circle", CurrentValue = false, Callback = function(v) Settings.Aimbot.FOVFilled = v end})
 
 -- Visuals Tab
 TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.ESP.Enabled = v end})
