@@ -2,141 +2,132 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
--- Load Linoria UI & Managers
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Source/main/linoria/Libraries/SaveManager.lua"))()
+-- Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+if not Rayfield then return end
 
-local Window = Library:CreateWindow({
-    Title = "Universal ESP",
-    Footer = "Linoria Edition",
-    NotifySide = "Right",
-    ShowCustomCursor = true
+local Window = Rayfield:CreateWindow({
+   Name = "Universal Aimbot & ESP",
+   LoadingTitle = "Loading Hub...",
+   LoadingSubtitle = "Rayfield Edition",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
 })
 
-local Tabs = {
-    Visuals = Window:CreateTab("Visuals", 1),
-    Settings = Window:CreateTab("Settings", 2)
-}
+local TabAimbot = Window:CreateTab("Aimbot", 4483362458)
+local TabVisuals = Window:CreateTab("Visuals", 4483362458)
+local TabSettings = Window:CreateTab("Settings", 4483362458)
 
 -- ============================================
--- ESP SETTINGS
+-- SETTINGS
 -- ============================================
 local Settings = {
-    Enabled = false,
-    TeamCheck = false,
-    Boxes = true,
-    Names = true,
-    Distance = true,
-    Tracers = false,
-    BoxColor = Color3.fromRGB(255, 0, 0),
-    TextColor = Color3.fromRGB(255, 255, 255),
-    TracerColor = Color3.fromRGB(255, 0, 0),
-    TextSize = 13
+    Aimbot = {
+        Enabled = false,
+        TeamCheck = false,
+        AimPart = "Head",
+        Smoothness = 0.2,
+        FOV = 100,
+        VisibleCheck = false
+    },
+    ESP = {
+        Enabled = false,
+        TeamCheck = false,
+        Boxes = true,
+        Names = true,
+        Distance = true,
+        Tracers = false,
+        BoxColor = Color3.fromRGB(255, 0, 0),
+        TextColor = Color3.fromRGB(255, 255, 255),
+        TracerColor = Color3.fromRGB(255, 0, 0),
+        TextSize = 13
+    }
 }
 
-local VisualsGroup = Tabs.Visuals:CreateLeftGroupbox("Player ESP")
-local WorldGroup = Tabs.Visuals:CreateRightGroupbox("World Visuals")
+-- ============================================
+-- AIMBOT LOGIC
+-- ============================================
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.5
+FOVCircle.Radius = 100
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Filled = false
+FOVCircle.Visible = false
 
-VisualsGroup:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = false,
-    Flag = "ESP_Enable",
-    Callback = function(Value) Settings.Enabled = Value end
-})
+local function GetClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-VisualsGroup:CreateToggle({
-    Name = "Team Check",
-    CurrentValue = false,
-    Flag = "ESP_TeamCheck",
-    Callback = function(Value) Settings.TeamCheck = Value end
-})
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            if not Settings.Aimbot.TeamCheck or (player.Team ~= LocalPlayer.Team or LocalPlayer.Team == nil) then
+                local targetPart = player.Character:FindFirstChild(Settings.Aimbot.AimPart)
+                if targetPart then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                    if onScreen then
+                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - centerScreen).Magnitude
+                        if distance < Settings.Aimbot.FOV and distance < shortestDistance then
+                            -- Visibility Check (Optional)
+                            local isVisible = true
+                            if Settings.Aimbot.VisibleCheck then
+                                local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
+                                local hit = Workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character, Camera})
+                                if hit and not hit:IsDescendantOf(player.Character) then
+                                    isVisible = false
+                                end
+                            end
 
-VisualsGroup:CreateToggle({
-    Name = "Boxes",
-    CurrentValue = true,
-    Flag = "ESP_Boxes",
-    Callback = function(Value) Settings.Boxes = Value end
-})
-
-VisualsGroup:CreateToggle({
-    Name = "Names",
-    CurrentValue = true,
-    Flag = "ESP_Names",
-    Callback = function(Value) Settings.Names = Value end
-})
-
-VisualsGroup:CreateToggle({
-    Name = "Distance",
-    CurrentValue = true,
-    Flag = "ESP_Distance",
-    Callback = function(Value) Settings.Distance = Value end
-})
-
-VisualsGroup:CreateToggle({
-    Name = "Tracers",
-    CurrentValue = false,
-    Flag = "ESP_Tracers",
-    Callback = function(Value) Settings.Tracers = Value end
-})
-
-VisualsGroup:CreateColorPicker({
-    Name = "Box Color",
-    Color = Color3.fromRGB(255, 0, 0),
-    Callback = function(Value) Settings.BoxColor = Value end
-})
-
-VisualsGroup:CreateColorPicker({
-    Name = "Text Color",
-    Color = Color3.fromRGB(255, 255, 255),
-    Callback = function(Value) Settings.TextColor = Value end
-})
-
-VisualsGroup:CreateSlider({
-    Name = "Text Size",
-    Range = {8, 20},
-    Increment = 1,
-    Suffix = "px",
-    CurrentValue = 13,
-    Callback = function(Value) Settings.TextSize = Value end
-})
-
-WorldGroup:CreateToggle({
-    Name = "Fullbright",
-    CurrentValue = false,
-    Flag = "World_Fullbright",
-    Callback = function(Value)
-        if Value then
-            Lighting.Brightness = 2
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-        else
-            Lighting.Brightness = 1
-            Lighting.ClockTime = 12
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = true
+                            if isVisible then
+                                shortestDistance = distance
+                                closestPlayer = player
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
-})
+    return closestPlayer
+end
 
-WorldGroup:CreateSlider({
-    Name = "Camera FOV",
-    Range = {40, 120},
-    Increment = 1,
-    Suffix = "FOV",
-    CurrentValue = 70,
-    Callback = function(Value)
-        Camera.FieldOfView = Value
+RunService.RenderStepped:Connect(function()
+    -- Update FOV Circle
+    if Settings.Aimbot.Enabled then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = Settings.Aimbot.FOV
+        FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
+    else
+        FOVCircle.Visible = false
     end
-})
+
+    -- Aimbot Logic
+    if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local target = GetClosestPlayer()
+        if target then
+            local targetPart = target.Character:FindFirstChild(Settings.Aimbot.AimPart)
+            if targetPart then
+                local targetPos = targetPart.Position
+                local aimPos = Camera.CFrame.Position + (targetPos - Camera.CFrame.Position).Unit * 1000
+                local newCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+                
+                if Settings.Aimbot.Smoothness > 0 then
+                    Camera.CFrame = Camera.CFrame:Lerp(newCFrame, Settings.Aimbot.Smoothness)
+                else
+                    Camera.CFrame = newCFrame
+                end
+            end
+        end
+    end
+end)
 
 -- ============================================
--- ESP LOGIC (Drawing API)
+-- ESP LOGIC
 -- ============================================
 local EspObjects = {}
 
@@ -180,7 +171,7 @@ Players.PlayerRemoving:Connect(function(p) ClearEsp(p) end)
 for _, p in ipairs(Players:GetPlayers()) do CreateEsp(p) end
 
 RunService.RenderStepped:Connect(function()
-    if Settings.Enabled then
+    if Settings.ESP.Enabled then
         for player, obj in pairs(EspObjects) do
             local char = player.Character
             if char and player ~= LocalPlayer then
@@ -189,7 +180,7 @@ RunService.RenderStepped:Connect(function()
                 local hum = char:FindFirstChild("Humanoid")
                 if hrp and head and hum and hum.Health > 0 then
                     local isTeammate = false
-                    if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
+                    if Settings.ESP.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isTeammate = true end
                     
                     local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
                     if onScreen and not isTeammate then
@@ -198,12 +189,12 @@ RunService.RenderStepped:Connect(function()
                         local height = math.abs(headPos.Y - legPos.Y)
                         local width = height / 2
                         
-                        if Settings.Boxes then
+                        if Settings.ESP.Boxes then
                             obj.Box.Visible = true
                             obj.BoxOutline.Visible = true
                             obj.Box.Size = Vector2.new(width, height)
                             obj.Box.Position = Vector2.new(headPos.X - width / 2, headPos.Y)
-                            obj.Box.Color = Settings.BoxColor
+                            obj.Box.Color = Settings.ESP.BoxColor
                             obj.BoxOutline.Size = obj.Box.Size
                             obj.BoxOutline.Position = obj.Box.Position
                         else
@@ -211,32 +202,32 @@ RunService.RenderStepped:Connect(function()
                             obj.BoxOutline.Visible = false
                         end
                         
-                        if Settings.Names then
+                        if Settings.ESP.Names then
                             obj.Name.Visible = true
                             obj.Name.Text = player.DisplayName
                             obj.Name.Position = Vector2.new(headPos.X, headPos.Y - 16)
-                            obj.Name.Color = Settings.TextColor
-                            obj.Name.Size = Settings.TextSize
+                            obj.Name.Color = Settings.ESP.TextColor
+                            obj.Name.Size = Settings.ESP.TextSize
                         else
                             obj.Name.Visible = false
                         end
                         
-                        if Settings.Distance then
+                        if Settings.ESP.Distance then
                             obj.Distance.Visible = true
                             local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
                             obj.Distance.Text = tostring(dist) .. " studs"
                             obj.Distance.Position = Vector2.new(headPos.X, legPos.Y)
-                            obj.Distance.Color = Settings.TextColor
-                            obj.Distance.Size = Settings.TextSize
+                            obj.Distance.Color = Settings.ESP.TextColor
+                            obj.Distance.Size = Settings.ESP.TextSize
                         else
                             obj.Distance.Visible = false
                         end
                         
-                        if Settings.Tracers then
+                        if Settings.ESP.Tracers then
                             obj.Tracer.Visible = true
                             obj.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                             obj.Tracer.To = Vector2.new(headPos.X, headPos.Y)
-                            obj.Tracer.Color = Settings.TracerColor
+                            obj.Tracer.Color = Settings.ESP.TracerColor
                         else
                             obj.Tracer.Visible = false
                         end
@@ -278,18 +269,33 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================
--- SETTINGS TAB SETUP (Matches your image)
+-- UI SETUP
 -- ============================================
-local SettingsGroup = Tabs.Settings:CreateLeftGroupbox("Config")
-local ThemeGroup = Tabs.Settings:CreateRightGroupbox("Custom Theme")
 
--- Config Manager
-SaveManager:SetLibrary(Library)
-SaveManager:BuildConfigSection(SettingsGroup)
+-- Aimbot Tab
+TabAimbot:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) Settings.Aimbot.Enabled = v end})
+TabAimbot:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.TeamCheck = v end})
+TabAimbot:CreateToggle({Name = "Visible Check", CurrentValue = false, Callback = function(v) Settings.Aimbot.VisibleCheck = v end})
+TabAimbot:CreateDropdown({Name = "Aim Part", Options = {"Head", "HumanoidRootPart", "Torso"}, CurrentValue = "Head", Callback = function(v) Settings.Aimbot.AimPart = v end})
+TabAimbot:CreateSlider({Name = "FOV", Range = {10, 500}, Increment = 1, CurrentValue = 100, Callback = function(v) Settings.Aimbot.FOV = v end})
+TabAimbot:CreateSlider({Name = "Smoothness", Range = {0, 1}, Increment = 0.05, CurrentValue = 0.2, Callback = function(v) Settings.Aimbot.Smoothness = v end})
 
--- Theme Manager
-ThemeManager:SetLibrary(Library)
-ThemeManager:BuildThemeSection(ThemeGroup)
+-- Visuals Tab
+TabVisuals:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Settings.ESP.Enabled = v end})
+TabVisuals:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Settings.ESP.TeamCheck = v end})
+TabVisuals:CreateToggle({Name = "Boxes", CurrentValue = true, Callback = function(v) Settings.ESP.Boxes = v end})
+TabVisuals:CreateToggle({Name = "Names", CurrentValue = true, Callback = function(v) Settings.ESP.Names = v end})
+TabVisuals:CreateToggle({Name = "Distance", CurrentValue = true, Callback = function(v) Settings.ESP.Distance = v end})
+TabVisuals:CreateToggle({Name = "Tracers", CurrentValue = false, Callback = function(v) Settings.ESP.Tracers = v end})
+TabVisuals:CreateColorPicker({Name = "Box Color", Color = Color3.fromRGB(255, 0, 0), Callback = function(v) Settings.ESP.BoxColor = v end})
+TabVisuals:CreateColorPicker({Name = "Text Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(v) Settings.ESP.TextColor = v end})
+TabVisuals:CreateSlider({Name = "Text Size", Range = {8, 20}, Increment = 1, CurrentValue = 13, Callback = function(v) Settings.ESP.TextSize = v end})
 
--- Load saved settings
-SaveManager:LoadAutoloadConfig()
+-- Settings Tab
+TabSettings:CreateButton({Name = "Unload Script", Callback = function()
+    for player, _ in pairs(EspObjects) do ClearEsp(player) end
+    FOVCircle:Remove()
+    Rayfield:Destroy()
+end})
+
+Rayfield:Notify("Universal Hub", "Aimbot & ESP loaded successfully!", 5)
