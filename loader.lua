@@ -1,7 +1,6 @@
 --!nocheck
 -- ═══════════════════════════════════════════════════════════
--- UNIVERSAL AIMBOT & ESP HUB — FINAL EDITION
--- All fixes integrated: centered FOV, accurate boxes, UI first
+-- UNIVERSAL AIMBOT & ESP HUB — THIRD PERSON FIXED EDITION
 -- ═══════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -9,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
+local GuiService = game:GetService("GuiService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -205,11 +205,12 @@ local function GetDistance(part)
     return (Camera.CFrame.Position - part.Position).Magnitude
 end
 
+-- Mouse-relative screen distance (uses WorldToScreenPoint for Drawing API compatibility)
 local function GetScreenDistance(part)
-    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+    local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
     if not onScreen then return math.huge end
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    return (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+    local mousePos = UserInputService:GetMouseLocation()
+    return (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
 end
 
 local function IsVisible(targetPart, player)
@@ -231,11 +232,12 @@ local function IsVisible(targetPart, player)
     return true
 end
 
+-- FOV check relative to MOUSE position (third-person compatible)
 local function IsInFOV(part, fovRadius)
-    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+    local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
     if not onScreen then return false end
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+    local mousePos = UserInputService:GetMouseLocation()
+    local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
     return dist <= fovRadius
 end
 
@@ -267,7 +269,7 @@ local function GetTeamColor(player)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- FOV CIRCLE (centered on screen)
+-- FOV CIRCLE — follows mouse
 -- ═══════════════════════════════════════════════════════════
 
 local function SetupFOV()
@@ -291,14 +293,12 @@ local function UpdateFOV()
     State.FOVCircle.Filled = Config.Aimbot.FOVFilled
     State.FOVCircle.Transparency = Config.Aimbot.FOVTransparency
     State.FOVCircle.NumSides = Config.Aimbot.FOVNumSides
-    State.FOVCircle.Position = Vector2.new(
-        Camera.ViewportSize.X / 2,
-        Camera.ViewportSize.Y / 2
-    )
+    local mousePos = UserInputService:GetMouseLocation()
+    State.FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- CROSSHAIR
+-- CROSSHAIR — fixed inset offset
 -- ═══════════════════════════════════════════════════════════
 
 local function SetupCrosshair()
@@ -326,8 +326,9 @@ local function UpdateCrosshair()
         return
     end
     
+    local inset = GuiService:GetGuiInset()
     local cx = Camera.ViewportSize.X / 2
-    local cy = Camera.ViewportSize.Y / 2
+    local cy = (Camera.ViewportSize.Y / 2) + inset.Y
     local size = Config.Crosshair.Size
     local gap = Config.Crosshair.Gap
     local color = Config.Crosshair.Color
@@ -452,10 +453,10 @@ local function AimAtTarget(target)
     if Config.Aimbot.RageMode then
         Camera.CFrame = aimCFrame
     elseif Config.Aimbot.MouseAim and mousemoverel then
-        local screenPos, onScreen = Camera:WorldToViewportPoint(aimPos)
+        local screenPos, onScreen = Camera:WorldToScreenPoint(aimPos)
         if onScreen then
-            local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-            local delta = Vector2.new(screenPos.X - center.X, screenPos.Y - center.Y)
+            local mousePos = UserInputService:GetMouseLocation()
+            local delta = Vector2.new(screenPos.X - mousePos.X, screenPos.Y - mousePos.Y)
             local smooth = Config.Aimbot.Smoothness
             if smooth <= 0 then smooth = 1 end
             mousemoverel(delta.X * smooth, delta.Y * smooth)
@@ -488,7 +489,7 @@ local function GetSilentAimTarget()
     if not Config.SilentAim.Enabled then return nil end
     local closest = nil
     local shortest = math.huge
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local mousePos = UserInputService:GetMouseLocation()
     
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and not IsNPC(player) and IsAlive(player) then
@@ -499,9 +500,9 @@ local function GetSilentAimTarget()
             if not isTeam then
                 local part = GetTargetPart(player, Config.SilentAim.TargetPart, "HumanoidRootPart")
                 if part then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
                     if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
                         if dist <= Config.SilentAim.FOV and dist < shortest then
                             if not Config.SilentAim.WallCheck or IsVisible(part, player) then
                                 if Config.SilentAim.HitChance >= 100 or math.random(1, 100) <= Config.SilentAim.HitChance then
@@ -650,8 +651,8 @@ local function UpdateSkeleton(player, char)
             local p1 = char:FindFirstChild(bone[1])
             local p2 = char:FindFirstChild(bone[2])
             if p1 and p2 then
-                local s1, on1 = Camera:WorldToViewportPoint(p1.Position)
-                local s2, on2 = Camera:WorldToViewportPoint(p2.Position)
+                local s1, on1 = Camera:WorldToScreenPoint(p1.Position)
+                local s2, on2 = Camera:WorldToScreenPoint(p2.Position)
                 if on1 and on2 then
                     line.From = Vector2.new(s1.X, s1.Y)
                     line.To = Vector2.new(s2.X, s2.Y)
@@ -668,7 +669,6 @@ local function UpdateSkeleton(player, char)
     end
 end
 
--- body parts to sample for bounding box
 local BodyPartsToSample = {
     "Head", "HumanoidRootPart",
     "UpperTorso", "LowerTorso", "Torso",
@@ -758,10 +758,7 @@ local function UpdateESP(player)
     local obj = State.EspObjects[player]
     if not obj then return end
     
-    -- ═══════════════════════════════════════════════════════
-    -- MULTI-POINT SCREEN-SPACE BOUNDING BOX
-    -- ═══════════════════════════════════════════════════════
-    
+    -- MULTI-POINT SCREEN-SPACE BOUNDING BOX using WorldToScreenPoint
     local minX = math.huge
     local maxX = -math.huge
     local minY = math.huge
@@ -771,7 +768,7 @@ local function UpdateESP(player)
     for _, partName in ipairs(BodyPartsToSample) do
         local part = char:FindFirstChild(partName)
         if part then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
             if onScreen then
                 anyOnScreen = true
                 if screenPos.X < minX then minX = screenPos.X end
@@ -886,9 +883,9 @@ local function UpdateESP(player)
         obj.Tracer.Visible = true
         local origin
         if Config.ESP.TracerOrigin == "Bottom" then
-            origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+            origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y + GuiService:GetGuiInset().Y)
         elseif Config.ESP.TracerOrigin == "Center" then
-            origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            origin = Vector2.new(Camera.ViewportSize.X / 2, (Camera.ViewportSize.Y / 2) + GuiService:GetGuiInset().Y)
         else
             local m = UserInputService:GetMouseLocation()
             origin = Vector2.new(m.X, m.Y)
@@ -945,9 +942,9 @@ table.insert(State.Connections, Players.PlayerRemoving:Connect(function(p) Clear
 
 if Rayfield then
     local Window = Rayfield:CreateWindow({
-        Name = "Universal Hub — Final Edition",
+        Name = "Universal Hub — Third Person Fixed",
         LoadingTitle = "Loading Hub...",
-        LoadingSubtitle = "All fixes integrated",
+        LoadingSubtitle = "Mouse-relative FOV + Screen-coord ESP",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
     })
