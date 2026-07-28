@@ -1,6 +1,7 @@
 --!nocheck
 -- ═══════════════════════════════════════════════════════════
--- UNIVERSAL AIMBOT & ESP HUB — FIXED UI EDITION
+-- UNIVERSAL AIMBOT & ESP HUB — FINAL EDITION
+-- All fixes integrated: centered FOV, accurate boxes, UI first
 -- ═══════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -10,10 +11,9 @@ local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 
 -- ═══════════════════════════════════════════════════════════
--- LOAD RAYFIELD UI FIRST — with fallbacks
+-- LOAD RAYFIELD UI FIRST
 -- ═══════════════════════════════════════════════════════════
 
 local Rayfield = nil
@@ -32,7 +32,6 @@ for _, url in ipairs(rayfieldUrls) do
         Rayfield = result
         break
     end
-    warn("[Hub] Rayfield load failed from: " .. url)
 end
 
 if not Rayfield then
@@ -110,7 +109,6 @@ local Config = {
         Skeleton = false,
         SkeletonColor = Color3.fromRGB(255, 255, 255),
         SkeletonThickness = 1,
-        Dynamic = true,
     },
     Crosshair = {
         Enabled = false,
@@ -124,7 +122,6 @@ local Config = {
     },
     UI = {
         ToggleKey = Enum.KeyCode.RightControl,
-        Watermark = true,
         Notifications = true,
     },
 }
@@ -143,7 +140,6 @@ local State = {
     ChamsObjects = {},
     SkeletonObjects = {},
     Connections = {},
-    Loaded = false,
 }
 
 -- ═══════════════════════════════════════════════════════════
@@ -174,14 +170,12 @@ local function Notify(title, text, duration)
 end
 
 local function GetCharacter(player)
-    if not player then return nil end
-    return player.Character
+    return player and player.Character
 end
 
 local function GetHumanoid(player)
     local char = GetCharacter(player)
-    if not char then return nil end
-    return char:FindFirstChildOfClass("Humanoid")
+    return char and char:FindFirstChildOfClass("Humanoid")
 end
 
 local function GetTargetPart(player, partName, fallbackName)
@@ -225,12 +219,8 @@ local function IsVisible(targetPart, player)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     local ignoreList = {}
-    if LocalPlayer.Character then
-        table.insert(ignoreList, LocalPlayer.Character)
-    end
-    if player.Character then
-        table.insert(ignoreList, player.Character)
-    end
+    if LocalPlayer.Character then table.insert(ignoreList, LocalPlayer.Character) end
+    if player.Character then table.insert(ignoreList, player.Character) end
     params.FilterDescendantsInstances = ignoreList
     local result = Workspace:Raycast(origin, direction, params)
     if result and result.Instance then
@@ -277,7 +267,7 @@ local function GetTeamColor(player)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- FOV CIRCLE
+-- FOV CIRCLE (centered on screen)
 -- ═══════════════════════════════════════════════════════════
 
 local function SetupFOV()
@@ -301,8 +291,10 @@ local function UpdateFOV()
     State.FOVCircle.Filled = Config.Aimbot.FOVFilled
     State.FOVCircle.Transparency = Config.Aimbot.FOVTransparency
     State.FOVCircle.NumSides = Config.Aimbot.FOVNumSides
-    local mousePos = UserInputService:GetMouseLocation()
-    State.FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+    State.FOVCircle.Position = Vector2.new(
+        Camera.ViewportSize.X / 2,
+        Camera.ViewportSize.Y / 2
+    )
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -317,14 +309,12 @@ local function SetupCrosshair()
         State.CrosshairLines[i].Color = Config.Crosshair.Color
         State.CrosshairLines[i].Visible = false
     end
-    if Config.Crosshair.Dot then
-        if State.CrosshairDot then State.CrosshairDot:Remove() end
-        State.CrosshairDot = Drawing.new("Circle")
-        State.CrosshairDot.Radius = Config.Crosshair.DotSize
-        State.CrosshairDot.Color = Config.Crosshair.Color
-        State.CrosshairDot.Filled = true
-        State.CrosshairDot.Visible = false
-    end
+    if State.CrosshairDot then State.CrosshairDot:Remove() end
+    State.CrosshairDot = Drawing.new("Circle")
+    State.CrosshairDot.Radius = Config.Crosshair.DotSize
+    State.CrosshairDot.Color = Config.Crosshair.Color
+    State.CrosshairDot.Filled = true
+    State.CrosshairDot.Visible = false
 end
 
 local function UpdateCrosshair()
@@ -336,50 +326,52 @@ local function UpdateCrosshair()
         return
     end
     
-    local centerX = Camera.ViewportSize.X / 2
-    local centerY = Camera.ViewportSize.Y / 2
+    local cx = Camera.ViewportSize.X / 2
+    local cy = Camera.ViewportSize.Y / 2
     local size = Config.Crosshair.Size
     local gap = Config.Crosshair.Gap
+    local color = Config.Crosshair.Color
+    local thick = Config.Crosshair.Thickness
     
     if State.CrosshairLines[1] then
-        State.CrosshairLines[1].From = Vector2.new(centerX, centerY - gap - size)
-        State.CrosshairLines[1].To = Vector2.new(centerX, centerY - gap)
-        State.CrosshairLines[1].Color = Config.Crosshair.Color
-        State.CrosshairLines[1].Thickness = Config.Crosshair.Thickness
+        State.CrosshairLines[1].From = Vector2.new(cx, cy - gap - size)
+        State.CrosshairLines[1].To = Vector2.new(cx, cy - gap)
+        State.CrosshairLines[1].Color = color
+        State.CrosshairLines[1].Thickness = thick
         State.CrosshairLines[1].Visible = true
     end
     if State.CrosshairLines[2] then
-        State.CrosshairLines[2].From = Vector2.new(centerX, centerY + gap)
-        State.CrosshairLines[2].To = Vector2.new(centerX, centerY + gap + size)
-        State.CrosshairLines[2].Color = Config.Crosshair.Color
-        State.CrosshairLines[2].Thickness = Config.Crosshair.Thickness
+        State.CrosshairLines[2].From = Vector2.new(cx, cy + gap)
+        State.CrosshairLines[2].To = Vector2.new(cx, cy + gap + size)
+        State.CrosshairLines[2].Color = color
+        State.CrosshairLines[2].Thickness = thick
         State.CrosshairLines[2].Visible = true
     end
     if State.CrosshairLines[3] then
-        State.CrosshairLines[3].From = Vector2.new(centerX - gap - size, centerY)
-        State.CrosshairLines[3].To = Vector2.new(centerX - gap, centerY)
-        State.CrosshairLines[3].Color = Config.Crosshair.Color
-        State.CrosshairLines[3].Thickness = Config.Crosshair.Thickness
+        State.CrosshairLines[3].From = Vector2.new(cx - gap - size, cy)
+        State.CrosshairLines[3].To = Vector2.new(cx - gap, cy)
+        State.CrosshairLines[3].Color = color
+        State.CrosshairLines[3].Thickness = thick
         State.CrosshairLines[3].Visible = true
     end
     if State.CrosshairLines[4] then
-        State.CrosshairLines[4].From = Vector2.new(centerX + gap, centerY)
-        State.CrosshairLines[4].To = Vector2.new(centerX + gap + size, centerY)
-        State.CrosshairLines[4].Color = Config.Crosshair.Color
-        State.CrosshairLines[4].Thickness = Config.Crosshair.Thickness
+        State.CrosshairLines[4].From = Vector2.new(cx + gap, cy)
+        State.CrosshairLines[4].To = Vector2.new(cx + gap + size, cy)
+        State.CrosshairLines[4].Color = color
+        State.CrosshairLines[4].Thickness = thick
         State.CrosshairLines[4].Visible = true
     end
     
     if State.CrosshairDot then
-        State.CrosshairDot.Position = Vector2.new(centerX, centerY)
+        State.CrosshairDot.Position = Vector2.new(cx, cy)
         State.CrosshairDot.Radius = Config.Crosshair.DotSize
-        State.CrosshairDot.Color = Config.Crosshair.Color
+        State.CrosshairDot.Color = color
         State.CrosshairDot.Visible = Config.Crosshair.Dot
     end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- AIMBOT LOGIC
+-- AIMBOT
 -- ═══════════════════════════════════════════════════════════
 
 local function GetValidTargets()
@@ -620,7 +612,7 @@ local function CreateChams(player)
     State.ChamsObjects[player] = highlight
 end
 
-local SkeletonBones = {
+local SkeletonBonesR15 = {
     {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
     {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
     {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
@@ -642,7 +634,7 @@ local function UpdateSkeleton(player, char)
     end
     local hum = char:FindFirstChildOfClass("Humanoid")
     local rigType = hum and hum.RigType or Enum.HumanoidRigType.R15
-    local bones = rigType == Enum.HumanoidRigType.R6 and SkeletonBonesR6 or SkeletonBones
+    local bones = rigType == Enum.HumanoidRigType.R6 and SkeletonBonesR6 or SkeletonBonesR15
     if not State.SkeletonObjects[player] then
         State.SkeletonObjects[player] = {}
         for i = 1, #bones do
@@ -676,6 +668,20 @@ local function UpdateSkeleton(player, char)
     end
 end
 
+-- body parts to sample for bounding box
+local BodyPartsToSample = {
+    "Head", "HumanoidRootPart",
+    "UpperTorso", "LowerTorso", "Torso",
+    "LeftUpperArm", "RightUpperArm",
+    "LeftLowerArm", "RightLowerArm",
+    "LeftHand", "RightHand",
+    "Left Arm", "Right Arm",
+    "LeftUpperLeg", "RightUpperLeg",
+    "LeftLowerLeg", "RightLowerLeg",
+    "LeftFoot", "RightFoot",
+    "Left Leg", "Right Leg",
+}
+
 local function UpdateESP(player)
     if not Config.ESP.Enabled then
         local obj = State.EspObjects[player]
@@ -700,7 +706,6 @@ local function UpdateESP(player)
     if not char or player == LocalPlayer then return end
     
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    local head = char:FindFirstChild("Head")
     local hum = char:FindFirstChildOfClass("Humanoid")
     
     if not hrp or not hum or hum.Health <= 0 then
@@ -753,10 +758,31 @@ local function UpdateESP(player)
     local obj = State.EspObjects[player]
     if not obj then return end
     
-    local headPos, headOnScreen = Camera:WorldToViewportPoint(head and head.Position or hrp.Position)
-    local hrpScreenPos, hrpOnScreen = Camera:WorldToViewportPoint(hrp.Position)
+    -- ═══════════════════════════════════════════════════════
+    -- MULTI-POINT SCREEN-SPACE BOUNDING BOX
+    -- ═══════════════════════════════════════════════════════
     
-    if not headOnScreen and not hrpOnScreen then
+    local minX = math.huge
+    local maxX = -math.huge
+    local minY = math.huge
+    local maxY = -math.huge
+    local anyOnScreen = false
+    
+    for _, partName in ipairs(BodyPartsToSample) do
+        local part = char:FindFirstChild(partName)
+        if part then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                anyOnScreen = true
+                if screenPos.X < minX then minX = screenPos.X end
+                if screenPos.X > maxX then maxX = screenPos.X end
+                if screenPos.Y < minY then minY = screenPos.Y end
+                if screenPos.Y > maxY then maxY = screenPos.Y end
+            end
+        end
+    end
+    
+    if not anyOnScreen then
         obj.Box.Visible = false
         obj.BoxOutline.Visible = false
         obj.Name.Visible = false
@@ -767,74 +793,30 @@ local function UpdateESP(player)
         return
     end
     
-    -- ACCURATE BOX SIZING
-    local lowestY = headPos.Y
-    for _, partName in ipairs({"LeftFoot", "RightFoot", "Left Leg", "Right Leg", "LeftLowerLeg", "RightLowerLeg"}) do
-        local part = char:FindFirstChild(partName)
-        if part then
-            local sp, onS = Camera:WorldToViewportPoint(part.Position)
-            if onS and sp.Y > lowestY then
-                lowestY = sp.Y
-            end
-        end
-    end
+    local padX = 6
+    local padY = 4
     
-    if lowestY <= headPos.Y then
-        local bottomWorld = hrp.Position - Vector3.new(0, 3, 0)
-        local bs, bo = Camera:WorldToViewportPoint(bottomWorld)
-        if bo then
-            lowestY = bs.Y
-        else
-            lowestY = hrpScreenPos.Y + (hrpScreenPos.Y - headPos.Y) * 2
-        end
-    end
+    local boxX = minX - padX
+    local boxY = minY - padY
+    local boxW = (maxX - minX) + (padX * 2)
+    local boxH = (maxY - minY) + (padY * 2)
     
-    local leftShoulder = char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("Left Arm")
-    local rightShoulder = char:FindFirstChild("RightUpperArm") or char:FindFirstChild("Right Arm")
-    local leftX, rightX
-    if leftShoulder then
-        local sp, onS = Camera:WorldToViewportPoint(leftShoulder.Position)
-        if onS then leftX = sp.X end
-    end
-    if rightShoulder then
-        local sp, onS = Camera:WorldToViewportPoint(rightShoulder.Position)
-        if onS then rightX = sp.X end
-    end
+    if boxW < 10 then boxW = 10 end
+    if boxH < 15 then boxH = 15 end
     
-    local width, height, centerX, topY
-    if leftX and rightX then
-        width = math.abs(rightX - leftX) * 1.15
-        centerX = (leftX + rightX) / 2
-    else
-        height = math.abs(lowestY - headPos.Y)
-        width = height * 0.5
-        centerX = headPos.X
-    end
-    height = math.abs(lowestY - headPos.Y)
-    
-    if Config.ESP.Dynamic then
-        local extents = char:GetExtentsSize()
-        local expectedHeight = math.clamp(extents.Y * 200 / math.max(dist3D, 1), 20, 500)
-        if height < expectedHeight * 0.5 then
-            height = expectedHeight
-        end
-    end
-    
-    if height < 15 then height = 15 end
-    if width < 8 then width = 8 end
-    topY = headPos.Y - (height * 0.1)
-    local boxX = centerX - (width / 2)
-    local boxCenterY = topY + (height / 2)
+    local centerX = boxX + (boxW / 2)
+    local centerY = boxY + (boxH / 2)
     
     local boxColor = Config.ESP.UseTeamColors and GetTeamColor(player) or Config.ESP.BoxColor
     local nameColor = Config.ESP.UseTeamColors and GetTeamColor(player) or Config.ESP.NameColor
     local tracerColor = Config.ESP.UseTeamColors and GetTeamColor(player) or Config.ESP.TracerColor
     
+    -- BOX
     if Config.ESP.Boxes then
         obj.Box.Visible = true
         obj.BoxOutline.Visible = Config.ESP.BoxOutline
-        obj.Box.Size = Vector2.new(width, height)
-        obj.Box.Position = Vector2.new(boxX, topY)
+        obj.Box.Size = Vector2.new(boxW, boxH)
+        obj.Box.Position = Vector2.new(boxX, boxY)
         obj.Box.Color = boxColor
         obj.Box.Thickness = Config.ESP.BoxThickness
         obj.Box.Filled = Config.ESP.BoxFilled
@@ -846,39 +828,44 @@ local function UpdateESP(player)
         obj.BoxOutline.Visible = false
     end
     
+    -- NAME
     if Config.ESP.Names then
         obj.Name.Visible = true
         obj.Name.Text = tostring(player.DisplayName)
-        obj.Name.Position = Vector2.new(centerX, topY - 16)
+        obj.Name.Position = Vector2.new(centerX, boxY - 16)
         obj.Name.Color = nameColor
         obj.Name.Size = Config.ESP.NameSize
     else
         obj.Name.Visible = false
     end
     
+    -- DISTANCE
     if Config.ESP.Distance then
         obj.Distance.Visible = true
         obj.Distance.Text = tostring(math.floor(dist3D)) .. " studs"
-        obj.Distance.Position = Vector2.new(centerX, lowestY + 5)
+        obj.Distance.Position = Vector2.new(centerX, boxY + boxH + 4)
         obj.Distance.Color = Config.ESP.DistanceColor
         obj.Distance.Size = Config.ESP.DistanceSize
     else
         obj.Distance.Visible = false
     end
     
+    -- HEALTH BAR
     if Config.ESP.HealthBars then
         local healthPct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-        local barHeight = height
         local barWidth = 3
-        local barX = boxX - 6
+        local barX = boxX - barWidth - 3
+        
         obj.HealthBarBg.Visible = true
-        obj.HealthBarBg.Size = Vector2.new(barWidth, barHeight)
-        obj.HealthBarBg.Position = Vector2.new(barX, topY)
+        obj.HealthBarBg.Size = Vector2.new(barWidth, boxH)
+        obj.HealthBarBg.Position = Vector2.new(barX, boxY)
         obj.HealthBarBg.Color = Config.ESP.HealthBarBg
         obj.HealthBarBg.Filled = true
+        
         obj.HealthBar.Visible = true
-        obj.HealthBar.Size = Vector2.new(barWidth, barHeight * healthPct)
-        obj.HealthBar.Position = Vector2.new(barX, topY + (barHeight * (1 - healthPct)))
+        obj.HealthBar.Size = Vector2.new(barWidth, boxH * healthPct)
+        obj.HealthBar.Position = Vector2.new(barX, boxY + (boxH * (1 - healthPct)))
+        
         local r, g
         if healthPct > 0.5 then
             r = math.floor((1 - (healthPct - 0.5) * 2) * 255)
@@ -894,6 +881,7 @@ local function UpdateESP(player)
         obj.HealthBarBg.Visible = false
     end
     
+    -- TRACERS
     if Config.ESP.Tracers then
         obj.Tracer.Visible = true
         local origin
@@ -906,13 +894,14 @@ local function UpdateESP(player)
             origin = Vector2.new(m.X, m.Y)
         end
         obj.Tracer.From = origin
-        obj.Tracer.To = Vector2.new(centerX, boxCenterY)
+        obj.Tracer.To = Vector2.new(centerX, centerY)
         obj.Tracer.Color = tracerColor
         obj.Tracer.Thickness = Config.ESP.TracerThickness
     else
         obj.Tracer.Visible = false
     end
     
+    -- CHAMS
     if Config.ESP.Cham then
         CreateChams(player)
         local hl = State.ChamsObjects[player]
@@ -927,6 +916,7 @@ local function UpdateESP(player)
         State.ChamsObjects[player] = nil
     end
     
+    -- SKELETON
     UpdateSkeleton(player, char)
 end
 
@@ -950,16 +940,14 @@ table.insert(State.Connections, Players.PlayerAdded:Connect(OnPlayerAdded))
 table.insert(State.Connections, Players.PlayerRemoving:Connect(function(p) ClearESP(p) end))
 
 -- ═══════════════════════════════════════════════════════════
--- BUILD UI (before main loop starts)
+-- BUILD UI
 -- ═══════════════════════════════════════════════════════════
 
-local Window = nil
-
 if Rayfield then
-    Window = Rayfield:CreateWindow({
-        Name = "Universal Hub — Custom Edition",
+    local Window = Rayfield:CreateWindow({
+        Name = "Universal Hub — Final Edition",
         LoadingTitle = "Loading Hub...",
-        LoadingSubtitle = "Deep Customization Build",
+        LoadingSubtitle = "All fixes integrated",
         ConfigurationSaving = { Enabled = false },
         KeySystem = false,
     })
@@ -970,7 +958,7 @@ if Rayfield then
     local TabCrosshair = Window:CreateTab("Crosshair", 4483362458)
     local TabSettings = Window:CreateTab("Settings", 4483362458)
 
-    -- AIMBOT TAB
+    -- ─── AIMBOT TAB ───
     TabAimbot:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) Config.Aimbot.Enabled = v end})
     TabAimbot:CreateToggle({Name = "Rage Mode (Instant Snap)", CurrentValue = false, Callback = function(v) Config.Aimbot.RageMode = v end})
     TabAimbot:CreateToggle({Name = "Stealth Mode (Mouse Aim)", CurrentValue = true, Callback = function(v) Config.Aimbot.MouseAim = v end})
@@ -996,7 +984,7 @@ if Rayfield then
     TabAimbot:CreateSlider({Name = "FOV Transparency", Range = {0, 1}, Increment = 0.05, CurrentValue = 0.5, Callback = function(v) Config.Aimbot.FOVTransparency = v end})
     TabAimbot:CreateSlider({Name = "FOV Sides", Range = {3, 100}, Increment = 1, CurrentValue = 60, Callback = function(v) Config.Aimbot.FOVNumSides = v end})
 
-    -- SILENT AIM TAB
+    -- ─── SILENT AIM TAB ───
     TabSilent:CreateToggle({Name = "Enable Silent Aim", CurrentValue = false, Callback = function(v) Config.SilentAim.Enabled = v end})
     TabSilent:CreateDropdown({Name = "Target Part", Options = {"Head", "HumanoidRootPart", "Torso", "UpperTorso"}, CurrentValue = "Head", Callback = function(v) Config.SilentAim.TargetPart = v end})
     TabSilent:CreateSlider({Name = "FOV", Range = {10, 500}, Increment = 1, CurrentValue = 80, Callback = function(v) Config.SilentAim.FOV = v end})
@@ -1004,11 +992,10 @@ if Rayfield then
     TabSilent:CreateToggle({Name = "Team Check", CurrentValue = true, Callback = function(v) Config.SilentAim.TeamCheck = v end})
     TabSilent:CreateToggle({Name = "Wall Check", CurrentValue = false, Callback = function(v) Config.SilentAim.WallCheck = v end})
 
-    -- ESP TAB
+    -- ─── ESP TAB ───
     TabESP:CreateToggle({Name = "Enable ESP", CurrentValue = false, Callback = function(v) Config.ESP.Enabled = v end})
     TabESP:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(v) Config.ESP.TeamCheck = v end})
     TabESP:CreateToggle({Name = "Use Team Colors", CurrentValue = false, Callback = function(v) Config.ESP.UseTeamColors = v end})
-    TabESP:CreateToggle({Name = "Dynamic ESP", CurrentValue = true, Callback = function(v) Config.ESP.Dynamic = v end})
     TabESP:CreateSlider({Name = "Max Distance", Range = {50, 5000}, Increment = 10, CurrentValue = 1000, Callback = function(v) Config.ESP.MaxDistance = v end})
     TabESP:CreateToggle({Name = "Boxes", CurrentValue = true, Callback = function(v) Config.ESP.Boxes = v end})
     TabESP:CreateToggle({Name = "Box Outline", CurrentValue = true, Callback = function(v) Config.ESP.BoxOutline = v end})
@@ -1035,7 +1022,7 @@ if Rayfield then
     TabESP:CreateColorPicker({Name = "Skeleton Color", Color = Color3.fromRGB(255, 255, 255), Callback = function(v) Config.ESP.SkeletonColor = v end})
     TabESP:CreateSlider({Name = "Skeleton Thickness", Range = {0.5, 5}, Increment = 0.1, CurrentValue = 1, Callback = function(v) Config.ESP.SkeletonThickness = v end})
 
-    -- CROSSHAIR TAB
+    -- ─── CROSSHAIR TAB ───
     TabCrosshair:CreateToggle({Name = "Enable Crosshair", CurrentValue = false, Callback = function(v) Config.Crosshair.Enabled = v end})
     TabCrosshair:CreateColorPicker({Name = "Crosshair Color", Color = Color3.fromRGB(0, 255, 0), Callback = function(v) Config.Crosshair.Color = v end})
     TabCrosshair:CreateSlider({Name = "Size", Range = {2, 30}, Increment = 1, CurrentValue = 10, Callback = function(v) Config.Crosshair.Size = v end})
@@ -1045,7 +1032,7 @@ if Rayfield then
     TabCrosshair:CreateSlider({Name = "Dot Size", Range = {1, 10}, Increment = 1, CurrentValue = 2, Callback = function(v) Config.Crosshair.DotSize = v end})
     TabCrosshair:CreateToggle({Name = "Outline", CurrentValue = true, Callback = function(v) Config.Crosshair.Outline = v end})
 
-    -- SETTINGS TAB
+    -- ─── SETTINGS TAB ───
     TabSettings:CreateToggle({Name = "Notifications", CurrentValue = true, Callback = function(v) Config.UI.Notifications = v end})
     TabSettings:CreateButton({Name = "Unload Script", Callback = function()
         for player, _ in pairs(State.EspObjects) do ClearESP(player) end
@@ -1069,17 +1056,16 @@ if Rayfield then
     print("[Hub] UI built successfully.")
 else
     warn("[Hub] UI failed to load. Script running in headless mode.")
-    warn("[Hub] Toggle features by editing the Config table in the script.")
 end
 
 -- ═══════════════════════════════════════════════════════════
--- MAIN LOOP (starts AFTER UI is built)
+-- MAIN LOOP
 -- ═══════════════════════════════════════════════════════════
 
 SetupFOV()
 SetupCrosshair()
 
-local renderConn = RunService:BindToRenderStep("HubUpdate", Enum.RenderPriority.Camera.Value + 2, function()
+table.insert(State.Connections, RunService:BindToRenderStep("HubUpdate", Enum.RenderPriority.Camera.Value + 2, function()
     SafeCall(function()
         UpdateFOV()
         UpdateCrosshair()
@@ -1108,19 +1094,14 @@ local renderConn = RunService:BindToRenderStep("HubUpdate", Enum.RenderPriority.
             SilentAimTarget = nil
         end
     end)
-end)
-table.insert(State.Connections, renderConn)
+end))
 
--- UI toggle keybind
-UserInputService.InputBegan:Connect(function(input, processed)
+table.insert(State.Connections, UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Config.UI.ToggleKey then
-        if Rayfield then
-            Rayfield:Toggle()
-        end
+        if Rayfield then Rayfield:Toggle() end
     end
-end)
+end))
 
-State.Loaded = true
 Notify("Universal Hub", "Loaded successfully! Press RightControl to toggle UI.", 5)
 print("[Hub] Loaded. Press RightControl to toggle UI.")
